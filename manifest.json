@@ -1,0 +1,21 @@
+{
+  "name": "自動車保険見積もりアプリ",
+  "short_name": "自動車保険",
+  "description": "リバティ保険ショップの自動車保険見積もりアプリケーション",
+  "start_url": "index.html",
+  "display": "standalone",
+  "background_color": "#f3f4f6",
+  "theme_color": "#CC0022",
+  "icons": [
+    {
+      "src": "https://placehold.co/192x192/CC0022/ffffff?text=🚗",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "https://placehold.co/512x512/CC0022/ffffff?text=🚗",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

@@ -1,0 +1,1809 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#CC0022" /> <!-- テーマカラーをPWAに合わせて変更 -->
+    <meta
+      name="description"
+      content="自動車保険お見積もり情報入力アプリケーション"
+    />
+    <title>リバティ保険ショップ - 自動車保険お見積もり</title>
+
+    <!-- Tailwind CSS CDNを読み込み -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Interフォントを読み込み -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <!-- jsPDFとhtml2canvasのCDNを読み込み (PDF生成用) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+    <!-- PWA Manifestのリンクを追加 -->
+    <link rel="manifest" href="manifest.json">
+
+    <style>
+      /* カスタムフォントとフォーム要素のスタイリング */
+      body {
+        font-family: 'Inter', 'Noto Sans JP', sans-serif;
+      }
+      input[type="radio"].form-radio,
+      input[type="checkbox"].form-checkbox {
+          appearance: none;
+          -webkit-appearance: none;
+          -moz-appearance: none;
+          border: 2px solid #D1D5DB; /* gray-300 */
+          border-radius: 50%; /* for radio */
+          width: 1.25rem; /* h-5 */
+          height: 1.25rem; /* w-5 */
+          cursor: pointer;
+          transition: all 0.2s ease-in-out;
+      }
+      input[type="checkbox"].form-checkbox {
+          border-radius: 0.25rem; /* rounded */
+      }
+      input[type="radio"].form-radio:checked,
+      input[type="checkbox"].form-checkbox:checked {
+          background-color: #CC0022; /* リバティ保険ショップのテーマカラー */
+          border-color: #CC0022; /* リバティ保険ショップのテーマカラー */
+          position: relative;
+      }
+      input[type="radio"].form-radio:checked::before {
+          content: '';
+          display: block;
+          width: 0.5rem; /* h-2 */
+          height: 0.5rem; /* w-2 */
+          background-color: white;
+          border-radius: 50%;
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%);
+      }
+      input[type="checkbox"].form-checkbox:checked::before {
+          content: '';
+          display: block;
+          width: 0.75rem; /* for checkmark */
+          height: 0.75rem; /* for checkmark */
+          background-image: url("data:image/svg+xml,%3csvg viewBox='0 0 16 16' fill='white' xmlns='http://www.w3.org/2000/svg'%3e%3cpath d='M12.207 4.793a1 1 0 00-1.414-1.414L6.5 9.086 4.207 6.793a1 1 0 00-1.414 1.414l3 3a1 1 0 001.414 0l5-5z'/%3e%3c/svg%3e");
+          background-size: 100% 100%;
+          background-repeat: no-repeat;
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%);
+      }
+      input[type="radio"].form-radio:focus,
+      input[type="checkbox"].form-checkbox:focus {
+          outline: none;
+          box-shadow: 0 0 0 3px rgba(204, 0, 34, 0.45); /* テーマカラーに合わせたフォーカスリング */
+      }
+    </style>
+  </head>
+  <body>
+    <noscript>JavaScriptを有効にしてください。このアプリはJavaScriptが必要です。</noscript>
+
+    <div id="app-container" class="min-h-screen bg-gray-100 font-sans text-gray-900 flex flex-col antialiased">
+      <!-- ヘッダー部分 -->
+      <header id="app-header" class="bg-white shadow-md p-4 sticky top-0 z-10"></header>
+
+      <!-- メインコンテンツ部分 -->
+      <main id="app-main" class="flex-grow container mx-auto p-4 sm:p-6 lg:p-8">
+        <div id="app-content" class="max-w-4xl mx-auto">
+          <!-- ここに各ステップのコンテンツが動的に挿入されます -->
+        </div>
+      </main>
+
+      <!-- フッター部分 -->
+      <footer id="app-footer" class="bg-white shadow-md p-4 mt-8 sticky bottom-0 z-10"></footer>
+
+      <!-- メッセージボックスのコンテナ -->
+      <div id="message-box-container"></div>
+    </div>
+
+    <script>
+      // グローバル状態管理
+      // totalStepsを修正し、ThankYouScreenを含まないようにする (7ステップ + 確認画面)
+      let currentStep = 0; // 0: Welcome, 1: CarInfo, ..., 6: PaymentAndNotes, 7: Confirmation
+      const totalSteps = 7; // 全ステップ数 (Welcome + 入力6ステップ + Confirmation)
+
+      // フォームデータの初期状態
+      const initialFormData = {
+        receptionYear: '', receptionMonth: '', receptionDay: '', customerName: '',
+        hasVehicleInspectionCertificate: '',
+        carManufacturer: '', carModel: '', carType: '', firstRegistrationDate: '', licensePlate: '', chassisNumber: '', carOwnerName: '',
+        mainDriverIsApplicant: '', mainDriverName: '', mainDriverRelationship: '',
+        mainCarUsage: '', safetyFeatures: [], otherSafetyFeatures: '',
+        mainDriverLicenseColor: '', driverCoverageRange: '', driverAgeCondition: '',
+        otherDrivers: [], // name, dob, relationship, licenseColor
+        hasCurrentInsurance: '', currentInsuranceCompany: '', currentPolicyNumber: '', currentPolicyEndDate: '', currentNonFleetGrade: '', accidentFactorApplicablePeriod: '', previousAccidentCount: '', previousAccidentDetailCount: '',
+        hasSecondCar: '', secondCarInsuranceCompany: '', secondCarPolicyNumber: '', secondCarPolicyEndDate: '', secondCarNonFleetGrade: '', secondCarContractorName: '', secondCarContractorRelationship: '', secondCarMainDriverName: '', secondCarMainDriverRelationship: '', secondCarType: '',
+        desiredInsurancePeriod: '', multiYearPeriod: '', insuranceStartDate: '',
+        personalLiabilityInsurance: '', propertyLiabilityInsurance: '', propertyLiabilityOtherAmount: '', propertyLiabilityDeductible: '', propertyLiabilityDeductibleOtherAmount: '', personalInjuryInsurance: '', personalInjuryOtherAmount: '', personalInjuryCoverageScope: '', personalInjuryInpatientAllowance: '', personalInjuryDeathDisabilityAllowance: '', personalInjuryDeathDisabilityAmount: '',
+        vehicleInsuranceType: '', vehicleInsuranceAmount: '', vehicleInsuranceDeductibleFirst: '', vehicleInsuranceDeductibleSecond: '',
+        lawyerFeeSpecialClause: false, personalLiabilitySpecialClause: false, newCarSpecialClause: false, totalLossRecoverySpecialClause: false, rentalCarAllowanceSpecialClause: false, rentalCarDailyAmount: '', otherSpecialClauses: '', hasDashCam: '',
+        paymentMethod: '', paymentMethodOther: '', paymentFrequency: '',
+        desiredPlan: '', importantPoints: '', otherQuestions: '',
+        consentToSubmit: false, // 同意チェックボックスの追加
+        signature: '', signYear: '', signMonth: '', signDay: ''
+      };
+      let formData = { ...initialFormData }; // 現在のフォームデータ
+
+      // DOM要素を簡単に作成するヘルパー関数
+      function createElement(tag, classes = [], attributes = {}, innerHTML = '') {
+        const el = document.createElement(tag);
+        if (classes.length > 0) el.className = classes.join(' ');
+        for (const key in attributes) {
+          el.setAttribute(key, attributes[key]);
+        }
+        if (innerHTML) el.innerHTML = innerHTML;
+        return el;
+      }
+
+      // フォームデータを更新し、アプリケーションを再描画する関数
+      function updateFormDataAndRender(field, value) {
+        if (typeof field === 'object' && field !== null) {
+          // 複数のフィールドを一度に更新する場合
+          formData = { ...formData, ...field };
+        } else {
+          // 単一のフィールドを更新する場合
+          formData[field] = value;
+        }
+        renderApp();
+      }
+
+      // ヘッダーをレンダリングする関数
+      function renderHeader() {
+        const headerEl = document.getElementById('app-header');
+        headerEl.innerHTML = ''; // クリア
+
+        const headerContent = createElement('div', ['max-w-4xl', 'mx-auto', 'flex', 'items-center', 'justify-between']);
+        headerContent.innerHTML = `
+          <h1 class="text-2xl font-bold text-gray-800">
+            リバティ保険ショップ<span class="text-[#CC0022] ml-2">見積もり</span>
+          </h1>
+          <div class="flex items-center space-x-2">
+            <div class="w-40 bg-gray-200 rounded-full h-2.5">
+              <div class="bg-[#CC0022] h-2.5 rounded-full transition-all duration-500 ease-in-out" style="width: ${((currentStep + 1) / (totalSteps + 1)) * 100}%"></div>
+            </div>
+            <span class="text-sm font-medium text-gray-700">${currentStep + 1} / ${totalSteps + 1}</span>
+          </div>
+        `;
+        headerEl.appendChild(headerContent);
+      }
+
+      // フッター（ナビゲーションボタン）をレンダリングする関数
+      function renderFooter() {
+        const footerEl = document.getElementById('app-footer');
+        footerEl.innerHTML = ''; // クリア
+
+        // currentStepがtotalSteps (つまり確認画面) の場合、フッターは表示しない（PDF生成後もフッターを非表示にするため）
+        if (currentStep > totalSteps) {
+          return;
+        }
+
+        const footerContent = createElement('div', ['max-w-4xl', 'mx-auto', 'flex', 'justify-between', 'items-center']);
+
+        if (currentStep > 0) { // WelcomeScreen (step 0) では「戻る」ボタンを表示しない
+          const prevButton = createElement('button', [
+            'flex', 'items-center', 'px-6', 'py-3', 'bg-gray-200', 'text-gray-700',
+            'rounded-full', 'shadow-md', 'hover:bg-gray-300', 'transition-colors', 'duration-200'
+          ], {}, `
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd" />
+            </svg>
+            戻る
+          `);
+          prevButton.addEventListener('click', handlePrevious);
+          footerContent.appendChild(prevButton);
+        }
+
+        const isLastStep = (currentStep === totalSteps); // Confirmation Screen is the new last step
+
+        const nextButtonClass = isLastStep ? 'bg-[#CC0022] hover:bg-[#A3001C]' : 'bg-[#CC0022] hover:bg-[#A3001C]'; // テーマカラーを適用
+        const nextButtonText = isLastStep ? 'PDF出力' : '次へ';
+        const nextButtonMarginClass = currentStep === 0 ? 'ml-auto' : ''; // WelcomeScreen のみ右寄せ
+
+        const nextButton = createElement('button', [
+          'flex', 'items-center', nextButtonMarginClass, 'px-6', 'py-3',
+          'rounded-full', 'shadow-lg', 'transition-all', 'duration-200',
+          nextButtonClass, 'text-white', 'font-semibold'
+        ], {}, `
+          ${nextButtonText}
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 ml-2" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+          </svg>
+        `);
+        nextButton.addEventListener('click', handleNext);
+        footerContent.appendChild(nextButton);
+
+        footerEl.appendChild(footerContent);
+      }
+
+      // ナビゲーション関数
+      function handleNext() {
+        if (currentStep < totalSteps) { // totalStepsは確認画面の手前まで
+          currentStep++;
+        } else if (currentStep === totalSteps) { // 最終ステップ（確認画面）での処理
+          if (!formData.consentToSubmit) {
+            showMessageBox("PDF出力には同意チェックが必要です。", null);
+            return;
+          }
+          exportFormToPDF(); // PDF生成関数を呼び出す
+          // PDF生成後、確認画面に留まるか、完了メッセージを表示
+          showMessageBox("PDFが正常に生成され、ダウンロードされました。", null);
+          return;
+        }
+        renderApp();
+      }
+
+      function handlePrevious() {
+        if (currentStep > 0) {
+          currentStep--;
+        }
+        renderApp();
+      }
+
+      // PDF生成関数を外部に切り出し
+      function exportFormToPDF() {
+        const input = document.getElementById('pdf-content-to-capture');
+        if (!input) {
+          console.error('PDF出力対象の要素が見つかりません。');
+          return;
+        }
+
+        console.log('PDF生成処理を開始します...');
+        html2canvas(input, {
+          scale: 2,
+          useCORS: true, // クロスオリジン画像を許可
+          logging: true, // コンソールにログを出力
+          windowWidth: document.querySelector('.max-w-4xl').scrollWidth,
+          windowHeight: document.querySelector('.max-w-4xl').scrollHeight
+        }).then((canvas) => {
+          console.log('html2canvasによるキャンバスレンダリングが完了しました。');
+          const imgData = canvas.toDataURL('image/png');
+          console.log('キャンバスデータをPNG画像データURLに変換しました。');
+
+          // jsPDFのコンストラクターを正しく呼び出す
+          const pdf = new window.jspdf.jsPDF('p', 'mm', 'a4');
+          const imgWidth = 210; // A4幅 (mm)
+          const pageHeight = 297; // A4高さ (mm)
+          const imgHeight = (canvas.height * imgWidth) / canvas.width;
+          let heightLeft = imgHeight;
+          let position = 0;
+
+          console.log('PDFページ追加処理を開始します。');
+          pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+          heightLeft -= pageHeight;
+
+          while (heightLeft >= 0) {
+            position = heightLeft - imgHeight;
+            pdf.addPage();
+            pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+            heightLeft -= pageHeight;
+            console.log('新しいページを追加し、画像を配置しました。');
+          }
+          
+          // ファイル名に顧客名と日付を追加
+          const customerName = formData.customerName ? formData.customerName.replace(/[^a-zA-Z0-9_\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]/g, '') : '不明';
+          const date = new Date().toLocaleDateString('ja-JP', { year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\//g, ''); //YYYYMMDD形式
+
+          pdf.save(`自動車保険見積シート_${customerName}_${date}.pdf`);
+          console.log('PDFが正常に生成され、ダウンロードされました。');
+        }).catch((error) => {
+          console.error('PDF生成中にエラーが発生しました:', error);
+          console.error('エラーの詳細:', error.message);
+          showMessageBox("PDF出力中にエラーが発生しました。詳細については、ブラウザのコンソールをご確認ください。", null);
+        });
+      }
+
+      function handleEdit(sectionTitle) {
+        switch (sectionTitle) {
+          case '1. お見積り対象のお車について': currentStep = 1; break;
+          case '2. 運転される方の範囲や年齢条件について': currentStep = 2; break;
+          case '3. 現在の自動車保険のご契約状況および複数所有新規割引の確認': currentStep = 3; break;
+          case '4. 保険期間': currentStep = 4; break;
+          case '5. ご希望の補償内容について': currentStep = 5; break;
+          case '6. 保険料のお支払い方法について': currentStep = 6; break;
+          case '7. その他・ご要望など': currentStep = 7; break; // 確認画面を最終ステップに変更
+          default: currentStep = 0; break;
+        }
+        renderApp();
+      }
+
+      // カスタムメッセージボックス表示関数 (alertの代替)
+      function showMessageBox(message, onCloseCallback) {
+        const msgBoxContainer = document.getElementById('message-box-container');
+        msgBoxContainer.innerHTML = ''; // クリア
+
+        const overlay = createElement('div', ['fixed', 'inset-0', 'bg-gray-600', 'bg-opacity-50', 'flex', 'items-center', 'justify-center', 'z-50', 'p-4']);
+        const msgBox = createElement('div', ['bg-white', 'rounded-lg', 'shadow-xl', 'p-8', 'max-w-sm', 'w-full', 'text-center']);
+        const title = createElement('h3', ['text-2xl', 'font-bold', 'text-gray-800', 'mb-4'], {}, '処理完了'); // タイトルを「送信完了」から変更
+        const msgText = createElement('p', ['text-gray-700', 'mb-6'], {}, message);
+        const closeButton = createElement('button', ['px-6', 'py-2', 'bg-[#CC0022]', 'text-white', 'font-semibold', 'rounded-full', 'hover:bg-[#A3001C]', 'transition-colors', 'duration-200'], {}, '閉じる'); // テーマカラーを適用
+
+        closeButton.addEventListener('click', () => {
+          msgBoxContainer.innerHTML = ''; // メッセージボックスを削除
+          if (onCloseCallback) onCloseCallback();
+        });
+
+        msgBox.appendChild(title);
+        msgBox.appendChild(msgText);
+        overlay.appendChild(msgBox);
+        msgBoxContainer.appendChild(overlay);
+        // ここでボタンを追加する
+        msgBox.appendChild(closeButton); // ボタンをメッセージボックスに追加
+      }
+
+      // 未入力フィールドをチェックするヘルパー関数
+      const getIncompleteFields = (data) => {
+        const incomplete = [];
+
+        const checkField = (fieldKey, label, condition = true) => {
+          if (!condition) return;
+
+          const value = data[fieldKey];
+          if (typeof value === 'string' && value.trim() === '') {
+            incomplete.push(label);
+          } else if (Array.isArray(value) && value.length === 0) {
+            incomplete.push(label);
+          }
+        };
+
+        // Header fields (Reception Date, Customer Name)
+        checkField('receptionYear', '受付日(年)');
+        checkField('receptionMonth', '受付日(月)');
+        checkField('receptionDay', '受付日(日)');
+        checkField('customerName', 'お客様の氏名');
+
+
+        // 1. お車の情報
+        checkField('hasVehicleInspectionCertificate', '車検証の有無');
+        if (data.hasVehicleInspectionCertificate === 'no') {
+          checkField('carManufacturer', 'メーカー名');
+          checkField('carModel', '車名(通称名)');
+          checkField('carType', '型式');
+          checkField('firstRegistrationDate', '初度登録年月');
+          checkField('licensePlate', '登録番号(ナンバープレート)');
+          checkField('chassisNumber', '車台番号');
+          checkField('carOwnerName', 'お車の所有者様のお名前');
+        }
+        checkField('mainDriverIsApplicant', '主に運転される方');
+        if (data.mainDriverIsApplicant === 'other') {
+          checkField('mainDriverName', '主に運転される方のお名前');
+          checkField('mainDriverRelationship', '主に運転される方との続柄');
+        }
+        checkField('mainCarUsage', 'お車の主たるご使用目的');
+
+        // 2. 運転される方の情報
+        checkField('mainDriverLicenseColor', '運転免許証の色');
+        checkField('driverCoverageRange', '運転される方の範囲');
+        checkField('driverAgeCondition', '運転される方の年齢条件');
+        // 他の運転者の情報はここでは必須としない（任意入力のため）
+
+        // 3. 現在の自動車保険のご契約状況および複数所有新規割引の確認
+        checkField('hasCurrentInsurance', '現在、自動車保険に加入されていますか？');
+        if (data.hasCurrentInsurance === 'はい') {
+          checkField('currentInsuranceCompany', '現在ご加入の保険会社名');
+          checkField('currentPolicyNumber', '証券番号');
+          checkField('currentPolicyEndDate', '保険期間(満期日)');
+          checkField('currentNonFleetGrade', 'ノンフリート等級');
+          checkField('accidentFactorApplicablePeriod', '事故有係数適用期間');
+          checkField('previousAccidentCount', '前契約での事故件数');
+          if (data.previousAccidentCount === 'あり') {
+            checkField('previousAccidentDetailCount', '前契約での事故回数');
+          }
+        }
+        checkField('hasSecondCar', '1台目のお車はございますか？');
+        if (data.hasSecondCar === 'はい') {
+          checkField('secondCarInsuranceCompany', '1台目保険会社名');
+          checkField('secondCarPolicyNumber', '1台目証券番号');
+          checkField('secondCarPolicyEndDate', '1台目保険の満期日');
+          checkField('secondCarNonFleetGrade', '1台目ノンフリート等級');
+          checkField('secondCarContractorName', '1台目ご契約者様のお名前');
+          checkField('secondCarContractorRelationship', '1台目ご契約者様との続柄');
+          checkField('secondCarMainDriverName', '1台目記名被保険者様のお名前');
+          checkField('secondCarMainDriverRelationship', '1台目記名被保険者様との続柄');
+          checkField('secondCarType', '1台目お車の種類');
+        }
+
+        // 4. 保険期間
+        checkField('desiredInsurancePeriod', 'ご希望の保険期間');
+        if (data.desiredInsurancePeriod === '複数年') {
+          checkField('multiYearPeriod', '複数年数');
+        }
+        checkField('insuranceStartDate', '保険始期(開始日)');
+
+        // 5. ご希望の補償内容について
+        checkField('personalLiabilityInsurance', '対人賠償保険');
+        checkField('propertyLiabilityInsurance', '対物賠償保険');
+        if (data.propertyLiabilityInsurance === 'その他') {
+          checkField('propertyLiabilityOtherAmount', '対物賠償その他金額');
+        }
+        checkField('propertyLiabilityDeductible', '対物賠償自己負担額');
+        if (data.propertyLiabilityDeductible === 'その他') {
+          checkField('propertyLiabilityDeductibleOtherAmount', '対物賠償自己負担額その他');
+        }
+        checkField('personalInjuryInsurance', '人身傷害保険');
+        if (data.personalInjuryInsurance === 'その他') {
+          checkField('personalInjuryOtherAmount', '人身傷害その他金額');
+        }
+        checkField('personalInjuryCoverageScope', '人身傷害補償範囲');
+        checkField('personalInjuryInpatientAllowance', '人身傷害入院時定額給付金');
+        checkField('personalInjuryDeathDisabilityAllowance', '人身傷害死亡・後遺障害定額給付金特約');
+        if (data.personalInjuryDeathDisabilityAllowance === '希望する') {
+          checkField('personalInjuryDeathDisabilityAmount', '人身傷害死亡・後遺障害定額給付金額');
+        }
+        checkField('vehicleInsuranceType', '車両保険タイプ');
+        if (data.vehicleInsuranceType !== '希望しない') {
+          checkField('vehicleInsuranceAmount', '車両保険金額');
+          checkField('vehicleInsuranceDeductibleFirst', '車両保険自己負担額(1回目)');
+          checkField('vehicleInsuranceDeductibleSecond', '車両保険自己負担額(2回目以降)');
+        }
+        if (data.rentalCarAllowanceSpecialClause) {
+            checkField('rentalCarDailyAmount', '代車日額');
+        }
+
+        // 6. 保険料のお支払い方法について
+        checkField('paymentMethod', 'お支払い方法');
+        if (data.paymentMethod === 'その他') {
+          checkField('paymentMethodOther', 'その他支払い方法の詳細');
+        }
+        checkField('paymentFrequency', 'お支払い回数');
+
+        // 7. その他・ご要望など
+        // 同意はPDF出力時の必須チェックで処理
+        checkField('signature', '署名');
+        checkField('signYear', '日付(年)');
+        checkField('signMonth', '日付(月)');
+        checkField('signDay', '日付(日)');
+
+
+        return incomplete;
+      };
+
+      // --- 各ステップのレンダリング関数 ---
+
+      // Welcome Screen
+      function renderWelcomeScreen() {
+        const contentEl = document.getElementById('app-content');
+        // ロゴを削除
+        contentEl.innerHTML = `
+          <div class="min-h-[calc(100vh-160px)] flex flex-col items-center justify-center text-center p-6">
+            <h2 class="text-4xl font-extrabold text-gray-800 mb-4 tracking-tight">
+              自動車保険 <span class="text-[#CC0022]">お見積もり</span>
+            </h2>
+            <p class="text-lg text-gray-600 mb-8 max-w-xl">
+              お客様に最適な保険プランをご提案するため、簡単な情報のご入力をお願いいたします。数分で完了します。
+            </p>
+            <div class="bg-white p-6 rounded-lg shadow-md border border-gray-200 text-left w-full max-w-md">
+              <h3 class="text-xl font-semibold text-gray-800 mb-4">お客様へのお願い</h3>
+              <ul class="list-disc list-inside text-gray-700 space-y-2">
+                <li>ご入力いただいた情報は、最適な保険プラン作成のためにのみ使用します。</li>
+                <li>お車の情報（車検証など）をお手元にご準備いただくとスムーズです。</li>
+                <li>ご不明な点がございましたら、いつでもお問い合わせください。</li>
+              </ul>
+            </div>
+          </div>
+        `;
+      }
+
+      // Car Info Form
+      function renderCarInfoForm() {
+        const contentEl = document.getElementById('app-content');
+        contentEl.innerHTML = `
+          <div class="p-6 bg-white rounded-lg shadow-md border border-gray-200">
+            <h2 class="text-2xl font-bold text-gray-800 mb-6">1. お見積り対象のお車について</h2>
+
+            <!-- Header fields moved to here for PDF output -->
+            <div class="mb-8 p-6 bg-red-100 rounded-lg text-red-800 border border-red-200 section-highlight-red">
+                <p class="mb-4 text-center">
+                    取扱代理店名: リバティ保険ショップ ([宇都宮店/宇都宮南店])
+                </p>
+                <p class="mb-4 text-center">
+                    参照書類: 新規受付票(受付日: 西暦<input type="number" id="receptionYear" name="receptionYear" value="${formData.receptionYear}" class="form-input inline-block w-20 text-center mx-1" placeholder="YYYY">年
+                    <input type="number" id="receptionMonth" name="receptionMonth" value="${formData.receptionMonth}" class="form-input inline-block w-16 text-center mx-1" placeholder="MM">月
+                    <input type="number" id="receptionDay" name="receptionDay" value="${formData.receptionDay}" class="form-input inline-block w-16 text-center mx-1" placeholder="DD">日)
+                </p>
+                <p class="text-center font-semibold">お客さまの氏名: <input type="text" id="customerName" name="customerName" value="${formData.customerName}" class="form-input inline-block w-48 text-center mx-1" placeholder="お名前"> 様</p>
+            </div>
+
+            <div class="mb-6">
+              <label class="block text-gray-700 text-lg font-medium mb-3">
+                はじめに、お車の自動車検査証(車検証)はお手元にお持ちでいらっしゃいますでしょうか?
+              </label>
+              <div class="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-6">
+                <label class="inline-flex items-center cursor-pointer">
+                  <input type="radio" name="hasVehicleInspectionCertificate" value="yes" class="form-radio h-5 w-5 text-[#CC0022] border-gray-300 focus:ring-[#CC0022] rounded-full" ${formData.hasVehicleInspectionCertificate === 'yes' ? 'checked' : ''}>
+                  <span class="ml-3 text-lg text-gray-800">はい、持っています。</span>
+                </label>
+                <label class="inline-flex items-center cursor-pointer">
+                  <input type="radio" name="hasVehicleInspectionCertificate" value="no" class="form-radio h-5 w-5 text-[#CC0022] border-gray-300 focus:ring-[#CC0022] rounded-full" ${formData.hasVehicleInspectionCertificate === 'no' ? 'checked' : ''}>
+                  <span class="ml-3 text-lg text-gray-800">いいえ、持っていません(または、すぐには確認できません)。</span>
+                </label>
+              </div>
+            </div>
+
+            <div id="car-cert-info-message"></div>
+
+            <div id="car-cert-fields" class="hidden">
+              <div class="mb-8 p-6 border border-gray-300 rounded-lg bg-gray-50">
+                <h3 class="text-xl font-bold text-gray-800 mb-4">【車検証にて確認できる情報】</h3>
+                <p class="text-gray-600 mb-4 text-sm">
+                  (※車検証をお持ちで「はい、持っています。」にチェックされたお客様は、こちらの表へのご記入は不要でございます。)
+                </p>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
+                  <div class="col-span-1">
+                    <label for="carManufacturer" class="block text-sm font-medium text-gray-700 mb-1">メーカー名</label>
+                    <input type="text" id="carManufacturer" name="carManufacturer" value="${formData.carManufacturer}" placeholder="例:トヨタ、ホンダ、日産" class="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[#CC0022] focus:border-[#CC0022]">
+                  </div>
+                  <div class="col-span-1">
+                    <label for="carModel" class="block text-sm font-medium text-gray-700 mb-1">車名(通称名)</label>
+                    <input type="text" id="carModel" name="carModel" value="${formData.carModel}" placeholder="例:プリウス、フィット、ノート" class="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[#CC0022] focus:border-[#CC0022]">
+                  </div>
+                  <div class="col-span-1">
+                    <label for="carType" class="block text-sm font-medium text-gray-700 mb-1">型式</label>
+                    <input type="text" id="carType" name="carType" value="${formData.carType}" placeholder="(車検証に記載例:DAA-ZVW50)" class="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[#CC0022] focus:border-[#CC0022]">
+                  </div>
+                  <div class="col-span-1">
+                    <label for="firstRegistrationDate" class="block text-sm font-medium text-gray-700 mb-1">初度登録年月</label>
+                    <input type="date" id="firstRegistrationDate" name="firstRegistrationDate" value="${formData.firstRegistrationDate}" class="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[#CC0022] focus:border-[#CC0022]">
+                  </div>
+                  <div class="col-span-1">
+                    <label for="licensePlate" class="block text-sm font-medium text-gray-700 mb-1">登録番号(ナンバープレート)</label>
+                    <input type="text" id="licensePlate" name="licensePlate" value="${formData.licensePlate}" placeholder="例:宇都宮 300 あ 1234" class="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[#CC0022] focus:border-[#CC0022]">
+                  </div>
+                  <div class="col-span-1">
+                    <label for="chassisNumber" class="block text-sm font-medium text-gray-700 mb-1">車台番号</label>
+                    <input type="text" id="chassisNumber" name="chassisNumber" value="${formData.chassisNumber}" placeholder="(車検証に記載)" class="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[#CC0022] focus:border-[#CC0022]">
+                  </div>
+                  <div class="col-span-1 md:col-span-2">
+                    <label for="carOwnerName" class="block text-sm font-medium text-gray-700 mb-1">お車の所有者様のお名前</label>
+                    <input type="text" id="carOwnerName" name="carOwnerName" value="${formData.carOwnerName}" placeholder="(車検証に記載)" class="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[#CC0022] focus:border-[#CC0022]">
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="p-6 border border-gray-300 rounded-lg bg-gray-50">
+              <h3 class="text-xl font-bold text-gray-800 mb-4">【お客様にご記入いただく情報】</h3>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
+                <div class="col-span-1 md:col-span-2 mb-4">
+                  <label class="block text-sm font-medium text-gray-700 mb-2">主に運転される方</label>
+                  <div class="flex flex-col space-y-2">
+                    <label class="inline-flex items-center">
+                      <input type="radio" name="mainDriverIsApplicant" value="applicant" class="form-radio h-4 w-4 text-[#CC0022] border-gray-300 focus:ring-[#CC0022]" ${formData.mainDriverIsApplicant === 'applicant' ? 'checked' : ''}>
+                      <span class="ml-2 text-gray-800">「新規受付票」にご記入のご本人様</span>
+                    </label>
+                    <label class="inline-flex items-center">
+                      <input type="radio" name="mainDriverIsApplicant" value="other" class="form-radio h-4 w-4 text-[#CC0022] border-gray-300 focus:ring-[#CC0022]" ${formData.mainDriverIsApplicant === 'other' ? 'checked' : ''}>
+                      <span class="ml-2 text-gray-800">上記ご本人様以外の方</span>
+                    </label>
+                  </div>
+                  <div id="main-driver-other-fields" class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 ${formData.mainDriverIsApplicant === 'other' ? '' : 'hidden'}">
+                    <div>
+                      <label for="mainDriverName" class="block text-sm font-medium text-gray-700 mb-1">お名前</label>
+                      <input type="text" id="mainDriverName" name="mainDriverName" value="${formData.mainDriverName}" class="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[#CC0022] focus:border-[#CC0022]">
+                    </div>
+                    <div>
+                      <label for="mainDriverRelationship" class="block text-sm font-medium text-gray-700 mb-1">続柄</label>
+                      <input type="text" id="mainDriverRelationship" name="mainDriverRelationship" value="${formData.mainDriverRelationship}" class="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[#CC0022] focus:border-[#CC0022]">
+                    </div>
+                  </div>
+                </div>
+
+                <div class="col-span-1 md:col-span-2 mb-4">
+                  <label class="block text-sm font-medium text-gray-700 mb-2">お車の主たるご使用目的</label>
+                  <div class="flex flex-col space-y-2">
+                    <label class="inline-flex items-center">
+                      <input type="radio" name="mainCarUsage" value="日常生活・レジャー" class="form-radio h-4 w-4 text-[#CC0022] border-gray-300 focus:ring-[#CC0022]" ${formData.mainCarUsage === '日常生活・レジャー' ? 'checked' : ''}>
+                      <span class="ml-2 text-gray-800">日常生活・レジャー<p class="text-xs text-gray-500">(主に週末のお買い物、お子様の送迎、ドライブなど、日常的なご使用の場合)</p></span>
+                    </label>
+                    <label class="inline-flex items-center">
+                      <input type="radio" name="mainCarUsage" value="通勤・通学" class="form-radio h-4 w-4 text-[#CC0022] border-gray-300 focus:ring-[#CC0022]" ${formData.mainCarUsage === '通勤・通学' ? 'checked' : ''}>
+                      <span class="ml-2 text-gray-800">通勤・通学<p class="text-xs text-gray-500">(年間を通じて、月平均15日以上、ご自宅と勤務先または学校との往復にご使用の場合)</p></span>
+                    </label>
+                    <label class="inline-flex items-center">
+                      <input type="radio" name="mainCarUsage" value="お仕事でのご使用" class="form-radio h-4 w-4 text-[#CC0022] border-gray-300 focus:ring-[#CC0022]" ${formData.mainCarUsage === 'お仕事でのご使用' ? 'checked' : ''}>
+                      <span class="ml-2 text-gray-800">お仕事でのご使用<p class="text-xs text-gray-500">(商品の配達、集金、お客様先への訪問など、お車の運転がお仕事の内容に含まれる場合。通勤は含みません)</p></span>
+                    </label>
+                  </div>
+                </div>
+
+                <div class="col-span-1 md:col-span-2 mb-4">
+                  <label class="block text-sm font-medium text-gray-700 mb-2">搭載されている安全装置</label>
+                  <div class="flex flex-wrap gap-4">
+                    <label class="inline-flex items-center">
+                      <input type="checkbox" name="safetyFeatures" value="ABS" class="form-checkbox h-4 w-4 text-[#CC0022] rounded" ${formData.safetyFeatures.includes('ABS') ? 'checked' : ''}>
+                      <span class="ml-2 text-gray-800">ABS</span>
+                    </label>
+                    <label class="inline-flex items-center">
+                      <input type="checkbox" name="safetyFeatures" value="エアバッグ(運転席・助手席・サイド等)" class="form-checkbox h-4 w-4 text-[#CC0022] rounded" ${formData.safetyFeatures.includes('エアバッグ(運転席・助手席・サイド等)') ? 'checked' : ''}>
+                      <span class="ml-2 text-gray-800">エアバッグ(運転席・助手席・サイド等)</span>
+                    </label>
+                    <label class="inline-flex items-center">
+                      <input type="checkbox" name="safetyFeatures" value="衝突被害軽減ブレーキ (AEB)" class="form-checkbox h-4 w-4 text-[#CC0022] rounded" ${formData.safetyFeatures.includes('衝突被害軽減ブレーキ (AEB)') ? 'checked' : ''}>
+                      <span class="ml-2 text-gray-800">衝突被害軽減ブレーキ (AEB)</span>
+                    </label>
+                    <label class="inline-flex items-center">
+                      <input type="checkbox" name="safetyFeatures" value="横滑り防止装置" class="form-checkbox h-4 w-4 text-[#CC0022] rounded" ${formData.safetyFeatures.includes('横滑り防止装置') ? 'checked' : ''}>
+                      <span class="ml-2 text-gray-800">横滑り防止装置</span>
+                    </label>
+                    <div class="flex items-center">
+                      <label for="otherSafetyFeatures" class="ml-2 text-gray-800">その他</label>
+                      <input type="text" id="otherSafetyFeatures" name="otherSafetyFeatures" value="${formData.otherSafetyFeatures}" class="ml-2 px-4 py-2 border border-gray-300 rounded-md focus:ring-[#CC0022] focus:border-[#CC0022] w-auto" placeholder="(任意)">
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
+
+        // イベントリスナーの設定
+        contentEl.querySelectorAll('input[name="receptionYear"], input[name="receptionMonth"], input[name="receptionDay"], input[name="customerName"]').forEach(input => {
+            input.addEventListener('input', (e) => updateFormDataAndRender(e.target.name, e.target.value));
+        });
+
+        contentEl.querySelectorAll('input[name="hasVehicleInspectionCertificate"]').forEach(input => {
+          input.addEventListener('change', (e) => {
+            updateFormDataAndRender('hasVehicleInspectionCertificate', e.target.value);
+            updateCarCertFieldsVisibility();
+          });
+        });
+
+        contentEl.querySelectorAll('input[name="mainDriverIsApplicant"]').forEach(input => {
+          input.addEventListener('change', (e) => {
+            updateFormDataAndRender('mainDriverIsApplicant', e.target.value);
+            document.getElementById('main-driver-other-fields').classList.toggle('hidden', e.target.value !== 'other');
+          });
+        });
+
+        contentEl.querySelectorAll('input[name="mainCarUsage"]').forEach(input => {
+          input.addEventListener('change', (e) => updateFormDataAndRender('mainCarUsage', e.target.value));
+        });
+
+        contentEl.querySelectorAll('input[name="safetyFeatures"]').forEach(input => {
+          input.addEventListener('change', (e) => {
+            const value = e.target.value;
+            const checked = e.target.checked;
+            const currentFeatures = formData.safetyFeatures || [];
+            const updatedFeatures = checked
+              ? [...currentFeatures, value]
+              : currentFeatures.filter(item => item !== value);
+            updateFormDataAndRender('safetyFeatures', updatedFeatures);
+          });
+        });
+
+        contentEl.querySelectorAll('#car-cert-fields input[type="text"], #car-cert-fields input[type="date"], #car-cert-fields input[type="number"], #main-driver-other-fields input[type="text"], #otherSafetyFeatures').forEach(input => {
+          input.addEventListener('input', (e) => updateFormDataAndRender(e.target.name, e.target.value));
+        });
+
+        function updateCarCertFieldsVisibility() {
+          const certInfoMessage = document.getElementById('car-cert-info-message');
+          const certFields = document.getElementById('car-cert-fields');
+          if (formData.hasVehicleInspectionCertificate === 'yes') {
+            certInfoMessage.innerHTML = `
+              <div class="bg-blue-50 border-l-4 border-blue-400 text-blue-800 p-4 rounded-md mb-6" role="alert">
+                <p class="font-semibold mb-2">ありがとうございます。</p>
+                <p>車検証の記載内容につきましては、当社で確認させていただきますので、下記【車検証にて確認できる情報】の表へのご記入は不要でございます。お手数ですが、車検証をこちらのお見積り情報シートと一緒に受付担当者にお渡しください。</p>
+                <p class="mt-2 font-semibold">【お客様にご記入いただく情報】の表へのご記入のみお願いいたします。</p>
+              </div>
+            `;
+            certFields.classList.add('hidden');
+            certFields.querySelectorAll('input, select, textarea').forEach(el => el.disabled = true);
+          } else if (formData.hasVehicleInspectionCertificate === 'no') {
+            certInfoMessage.innerHTML = `
+              <div class="bg-yellow-50 border-l-4 border-yellow-400 text-yellow-800 p-4 rounded-md mb-6" role="alert">
+                <p class="font-semibold mb-2">かしこまりました。</p>
+                <p>その場合は、下記の全ての表(【車検証にて確認できる情報】 および 【お客様にご記入いただく情報】)へ、お分かりになる範囲でご記入をお願いいたします。正確な情報はお見積りやご契約手続きに必要となりますため、後日、車検証のご提出または内容のご確認を改めてお願い申し上げます。</p>
+              </div>
+            `;
+            certFields.classList.remove('hidden');
+            certFields.querySelectorAll('input, select, textarea').forEach(el => el.disabled = false);
+          } else {
+            certInfoMessage.innerHTML = '';
+            certFields.classList.add('hidden');
+            certFields.querySelectorAll('input, select, textarea').forEach(el => el.disabled = true);
+          }
+        }
+        updateCarCertFieldsVisibility(); // 初回ロード時にも適用
+        document.getElementById('main-driver-other-fields').classList.toggle('hidden', formData.mainDriverIsApplicant !== 'other');
+      }
+
+      // Driver Info Form
+      function renderDriverInfoForm() {
+        const contentEl = document.getElementById('app-content');
+        contentEl.innerHTML = `
+          <div class="p-6 bg-white rounded-lg shadow-md border border-gray-200">
+            <h2 class="text-2xl font-bold text-gray-800 mb-6">2. 運転される方の範囲や年齢条件について</h2>
+
+            <div class="mb-6">
+              <label class="block text-gray-700 text-lg font-medium mb-3">運転免許証の色</label>
+              <div class="flex flex-wrap gap-4">
+                ${['ゴールド', 'ブルー', 'グリーン'].map(color => `
+                  <label class="flex items-center px-4 py-2 border rounded-full cursor-pointer transition-colors duration-200 ${formData.mainDriverLicenseColor === color ? 'bg-[#CC0022] text-white border-[#CC0022] shadow-md' : 'bg-gray-100 text-gray-700 border-gray-300 hover:bg-gray-200'}">
+                    <input type="radio" name="mainDriverLicenseColor" value="${color}" class="hidden" ${formData.mainDriverLicenseColor === color ? 'checked' : ''}>
+                    <span class="font-semibold">${color}</span>
+                  </label>
+                `).join('')}
+              </div>
+            </div>
+
+            <div class="mb-6">
+              <label class="block text-gray-700 text-lg font-medium mb-3">運転される方の範囲をお選びください</label>
+              <div class="flex flex-col space-y-3">
+                ${['ご本人のみ', 'ご本人・配偶者様限定', '限定なし'].map(scope => `
+                  <label class="flex items-center p-4 border rounded-lg cursor-pointer transition-colors duration-200 ${formData.driverCoverageRange === scope ? 'bg-red-50 border-[#CC0022] ring-2 ring-[#CC0022]' : 'bg-white border-gray-300 hover:border-gray-400'}">
+                    <input type="radio" name="driverCoverageRange" value="${scope}" class="form-radio h-5 w-5 text-[#CC0022] border-gray-300 focus:ring-[#CC0022] rounded-full" ${formData.driverCoverageRange === scope ? 'checked' : ''}>
+                    <span class="ml-3 text-lg text-gray-800">${scope}</span>
+                  </label>
+                `).join('')}
+              </div>
+            </div>
+
+            <div class="mb-6">
+              <label class="block text-gray-700 text-lg font-medium mb-3">運転される方の年齢条件をお選びください</label>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                ${['全年齢補償', '21歳以上補償', '26歳以上補償', '35歳以上補償'].map(age => `
+                  <label class="flex items-center p-4 border rounded-lg cursor-pointer transition-colors duration-200 ${formData.driverAgeCondition === age ? 'bg-red-50 border-[#CC0022] ring-2 ring-[#CC0022]' : 'bg-white border-gray-300 hover:border-gray-400'}">
+                    <input type="radio" name="driverAgeCondition" value="${age}" class="form-radio h-5 w-5 text-[#CC0022] border-gray-300 focus:ring-[#CC0022] rounded-full" ${formData.driverAgeCondition === age ? 'checked' : ''}>
+                    <span class="ml-3 text-lg text-gray-800">${age}</span>
+                  </label>
+                `).join('')}
+              </div>
+            </div>
+
+            <div class="mb-6 border-t border-gray-200 pt-6 mt-6">
+              <label class="block text-gray-700 text-lg font-medium mb-4">
+                上記以外に主に運転される方がいらっしゃる場合 (お分かりでしたらご記入ください)
+              </label>
+              <div id="other-drivers-container">
+                ${formData.otherDrivers.map((driver, index) => `
+                  <div class="border border-gray-200 rounded-lg p-4 mb-4 bg-gray-50 relative">
+                    <h4 class="font-semibold text-gray-700 mb-3">追加運転者 ${index + 1}</h4>
+                    <button type="button" class="absolute top-3 right-3 text-[#CC0022] hover:text-[#A3001C] transition-colors remove-driver-btn" data-index="${index}" title="この運転者を削除">
+                      <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </button>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
+                      <div>
+                        <label for="otherDriverName-${index}" class="block text-sm font-medium text-gray-700 mb-1">お名前</label>
+                        <input type="text" id="otherDriverName-${index}" value="${driver.name}" data-index="${index}" data-field="name" class="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[#CC0022] focus:border-[#CC0022] other-driver-input">
+                      </div>
+                      <div>
+                        <label for="otherDriverDob-${index}" class="block text-sm font-medium text-gray-700 mb-1">生年月日</label>
+                        <input type="date" id="otherDriverDob-${index}" value="${driver.dob}" data-index="${index}" data-field="dob" class="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[#CC0022] focus:border-[#CC0022] other-driver-input">
+                      </div>
+                      <div>
+                        <label for="otherDriverRelationship-${index}" class="block text-sm font-medium text-gray-700 mb-1">主に運転される方との続柄</label>
+                        <input type="text" id="otherDriverRelationship-${index}" value="${driver.relationship}" data-index="${index}" data-field="relationship" class="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[#CC0022] focus:border-[#CC0022] other-driver-input">
+                      </div>
+                      <div>
+                        <label for="otherDriverLicenseColor-${index}" class="block text-sm font-medium text-gray-700 mb-1">免許証の色</label>
+                        <select id="otherDriverLicenseColor-${index}" data-index="${index}" data-field="licenseColor" class="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[#CC0022] focus:border-[#CC0022] bg-white other-driver-input">
+                          <option value="">選択してください</option>
+                          <option value="ゴールド" ${driver.licenseColor === 'ゴールド' ? 'selected' : ''}>ゴールド</option>
+                          <option value="ブルー" ${driver.licenseColor === 'ブルー' ? 'selected' : ''}>ブルー</option>
+                          <option value="グリーン" ${driver.licenseColor === 'グリーン' ? 'selected' : ''}>グリーン</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                `).join('')}
+              </div>
+              <button type="button" id="add-other-driver-btn" class="w-full flex items-center justify-center px-6 py-3 border border-dashed border-gray-400 text-gray-600 rounded-lg hover:bg-gray-100 transition-colors duration-200">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                  <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" />
+                </svg>
+                追加運転者を登録
+              </button>
+            </div>
+          </div>
+        `;
+
+        // イベントリスナーの設定
+        contentEl.querySelectorAll('input[name="mainDriverLicenseColor"], input[name="driverCoverageRange"], input[name="driverAgeCondition"]').forEach(input => {
+          input.addEventListener('change', (e) => updateFormDataAndRender(e.target.name, e.target.value));
+        });
+
+        contentEl.querySelector('#add-other-driver-btn').addEventListener('click', () => {
+          formData.otherDrivers.push({ name: '', dob: '', relationship: '', licenseColor: '' });
+          updateFormDataAndRender('otherDrivers', formData.otherDrivers); // 強制再描画
+        });
+
+        contentEl.querySelectorAll('.remove-driver-btn').forEach(button => {
+          button.addEventListener('click', (e) => {
+            const index = parseInt(e.target.closest('button').dataset.index);
+            formData.otherDrivers.splice(index, 1);
+            updateFormDataAndRender('otherDrivers', formData.otherDrivers); // 強制再描画
+          });
+        });
+
+        contentEl.querySelectorAll('.other-driver-input').forEach(input => {
+          input.addEventListener('input', (e) => {
+            const index = parseInt(e.target.dataset.index);
+            const field = e.target.dataset.field;
+            formData.otherDrivers[index][field] = e.target.value;
+            updateFormDataAndRender('otherDrivers', formData.otherDrivers); // 強制再描画
+          });
+          input.addEventListener('change', (e) => { // select要素の変更も考慮
+            const index = parseInt(e.target.dataset.index);
+            const field = e.target.dataset.field;
+            formData.otherDrivers[index][field] = e.target.value;
+            updateFormDataAndRender('otherDrivers', formData.otherDrivers); // 強制再描画
+          });
+        });
+      }
+
+      // Current Insurance Form
+      function renderCurrentInsuranceForm() {
+        const contentEl = document.getElementById('app-content');
+        contentEl.innerHTML = `
+          <div class="p-6 bg-white rounded-lg shadow-md border border-gray-200">
+            <h2 class="text-2xl font-bold text-gray-800 mb-6">3. 現在の自動車保険のご契約状況および複数所有新規割引の確認</h2>
+
+            <div class="mb-8 p-6 border border-gray-300 rounded-lg bg-gray-50">
+              <h3 class="text-xl font-bold text-gray-800 mb-4">(1) 今回お見積りするお車の現在のご契約について</h3>
+              <p class="text-gray-600 mb-4 text-sm">(「新規ご来店受付票」の「現在の保険の加入状況」もあわせて拝見いたします)</p>
+
+              <div class="mb-6">
+                <label class="block text-gray-700 text-lg font-medium mb-3">現在、自動車保険に加入されていますか？</label>
+                <div class="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-6">
+                  <label class="inline-flex items-center cursor-pointer">
+                    <input type="radio" name="hasCurrentInsurance" value="はい" class="form-radio h-5 w-5 text-[#CC0022] border-gray-300 focus:ring-[#CC0022] rounded-full" ${formData.hasCurrentInsurance === 'はい' ? 'checked' : ''}>
+                    <span class="ml-3 text-lg text-gray-800">はい</span>
+                  </label>
+                  <label class="inline-flex items-center cursor-pointer">
+                    <input type="radio" name="hasCurrentInsurance" value="いいえ" class="form-radio h-5 w-5 text-[#CC0022] border-gray-300 focus:ring-[#CC0022] rounded-full" ${formData.hasCurrentInsurance === 'いいえ' ? 'checked' : ''}>
+                    <span class="ml-3 text-lg text-gray-800">いいえ</span>
+                  </label>
+                </div>
+              </div>
+
+              <div id="current-insurance-details" class="${formData.hasCurrentInsurance === 'はい' ? '' : 'hidden'}">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
+                  <div>
+                    <label for="currentInsuranceCompany" class="block text-sm font-medium text-gray-700 mb-1">現在ご加入の保険会社名</label>
+                    <input type="text" id="currentInsuranceCompany" name="currentInsuranceCompany" value="${formData.currentInsuranceCompany}" class="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[#CC0022] focus:border-[#CC0022]">
+                  </div>
+                  <div>
+                    <label for="currentPolicyNumber" class="block text-sm font-medium text-gray-700 mb-1">証券番号</label>
+                    <input type="text" id="currentPolicyNumber" name="currentPolicyNumber" value="${formData.currentPolicyNumber}" class="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[#CC0022] focus:border-[#CC0022]">
+                  </div>
+                  <div>
+                    <label for="currentPolicyEndDate" class="block text-sm font-medium text-gray-700 mb-1">保険期間(ご契約期間の満期日)</label>
+                    <input type="date" id="currentPolicyEndDate" name="currentPolicyEndDate" value="${formData.currentPolicyEndDate}" class="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[#CC0022] focus:border-[#CC0022]">
+                  </div>
+                  <div>
+                    <label for="currentNonFleetGrade" class="block text-sm font-medium text-gray-700 mb-1">ノンフリート等級 (現在の等級)</label>
+                    <input type="number" id="currentNonFleetGrade" name="currentNonFleetGrade" value="${formData.currentNonFleetGrade}" class="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[#CC0022] focus:border-[#CC0022]">
+                  </div>
+                  <div>
+                    <label for="accidentFactorApplicablePeriod" class="block text-sm font-medium text-gray-700 mb-1">事故有係数適用期間</label>
+                    <input type="number" id="accidentFactorApplicablePeriod" name="accidentFactorApplicablePeriod" value="${formData.accidentFactorApplicablePeriod}" class="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[#CC0022] focus:border-[#CC0022]">
+                  </div>
+                  <div class="col-span-1 md:col-span-2">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">前契約での事故件数(過去1年間または3年間)</label>
+                    <div class="flex items-center space-x-4">
+                      <label class="inline-flex items-center">
+                        <input type="radio" name="previousAccidentCount" value="なし" class="form-radio h-4 w-4 text-[#CC0022] border-gray-300 focus:ring-[#CC0022]" ${formData.previousAccidentCount === 'なし' ? 'checked' : ''}>
+                        <span class="ml-2 text-gray-800">なし</span>
+                      </label>
+                      <label class="inline-flex items-center">
+                        <input type="radio" name="previousAccidentCount" value="あり" class="form-radio h-4 w-4 text-[#CC0022] border-gray-300 focus:ring-[#CC0022]" ${formData.previousAccidentCount === 'あり' ? 'checked' : ''}>
+                        <span class="ml-2 text-gray-800">あり</span>
+                      </label>
+                      <input type="number" id="previousAccidentDetailCount" name="previousAccidentDetailCount" value="${formData.previousAccidentCount === 'あり' ? formData.previousAccidentDetailCount : ''}" class="px-4 py-2 border border-gray-300 rounded-md w-24 focus:ring-[#CC0022] focus:border-[#CC0022] ${formData.previousAccidentCount === 'あり' ? '' : 'hidden'}" placeholder="回">
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="p-6 border border-gray-300 rounded-lg bg-gray-50">
+              <h3 class="text-xl font-bold text-gray-800 mb-4">(2) 複数所有新規割引 (セカンドカー割引)の適用確認について</h3>
+              <p class="text-gray-600 mb-4 text-sm">
+                今回お見積りするお車以外に、お客様または同居のご家族等が所有・使用されているお車 (1台目のお車)がございましたら、セカンドカー割引を適用できる場合がございます。適用条件の確認のため、お手数ですが下記についてお聞かせください。
+              </p>
+
+              <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">1台目のお車はございますか?</label>
+                <div class="flex space-x-4">
+                  <label class="inline-flex items-center">
+                    <input type="radio" name="hasSecondCar" value="はい" class="form-radio h-4 w-4 text-[#CC0022] border-gray-300 focus:ring-[#CC0022]" ${formData.hasSecondCar === 'はい' ? 'checked' : ''}>
+                    <span class="ml-2 text-gray-800">はい</span>
+                  </label>
+                  <label class="inline-flex items-center">
+                    <input type="radio" name="hasSecondCar" value="いいえ" class="form-radio h-4 w-4 text-[#CC0022] border-gray-300 focus:ring-[#CC0022]" ${formData.hasSecondCar === 'いいえ' ? 'checked' : ''}>
+                    <span class="ml-2 text-gray-800">いいえ</span>
+                  </label>
+                </div>
+              </div>
+
+              <div id="second-car-details" class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 mt-6 p-4 border border-gray-200 rounded-md bg-white ${formData.hasSecondCar === 'はい' ? '' : 'hidden'}">
+                <h4 class="col-span-1 md:col-span-2 text-md font-semibold text-gray-700 mb-2">1台目のお車について</h4>
+                <div>
+                  <label for="secondCarInsuranceCompany" class="block text-sm font-medium text-gray-700 mb-1">保険会社名</label>
+                  <input type="text" id="secondCarInsuranceCompany" name="secondCarInsuranceCompany" value="${formData.secondCarInsuranceCompany}" class="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[#CC0022] focus:border-[#CC0022]">
+                </div>
+                <div>
+                  <label for="secondCarPolicyNumber" class="block text-sm font-medium text-gray-700 mb-1">証券番号</label>
+                  <input type="text" id="secondCarPolicyNumber" name="secondCarPolicyNumber" value="${formData.secondCarPolicyNumber}" class="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[#CC0022] focus:border-[#CC0022]">
+                </div>
+                <div>
+                  <label for="secondCarPolicyEndDate" class="block text-sm font-medium text-gray-700 mb-1">保険の満期日</label>
+                  <input type="date" id="secondCarPolicyEndDate" name="secondCarPolicyEndDate" value="${formData.secondCarPolicyEndDate}" class="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[#CC0022] focus:border-[#CC0022]">
+                </div>
+                <div>
+                  <label for="secondCarNonFleetGrade" class="block text-sm font-medium text-gray-700 mb-1">現在のノンフリート等級</label>
+                  <input type="number" id="secondCarNonFleetGrade" name="secondCarNonFleetGrade" value="${formData.secondCarNonFleetGrade}" class="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[#CC0022] focus:border-[#CC0022]">
+                  <p class="text-xs text-gray-500 mt-1">(※割引適用には通常11等級以上が必要です)</p>
+                </div>
+                <div class="col-span-1 md:col-span-2">
+                  <label for="secondCarContractorName" class="block text-sm font-medium text-gray-700 mb-1">ご契約者様のお名前</label>
+                  <input type="text" id="secondCarContractorName" name="secondCarContractorName" value="${formData.secondCarContractorName}" class="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[#CC0022] focus:border-[#CC0022]">
+                  <label for="secondCarContractorRelationship" class="block text-sm font-medium text-gray-700 mt-2 mb-1"> (今回のお車の記名被保険者予定者との続柄) </label>
+                  <input type="text" id="secondCarContractorRelationship" name="secondCarContractorRelationship" value="${formData.secondCarContractorRelationship}" placeholder="例:本人、配偶者、同居の父など" class="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[#CC0022] focus:border-[#CC0022]">
+                </div>
+                <div class="col-span-1 md:col-span-2">
+                  <label for="secondCarMainDriverName" class="block text-sm font-medium text-gray-700 mb-1">記名被保険者様 (主に運転される方)のお名前</label>
+                  <input type="text" id="secondCarMainDriverName" name="secondCarMainDriverName" value="${formData.secondCarMainDriverName}" class="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[#CC0022] focus:border-[#CC0022]">
+                  <label for="secondCarMainDriverRelationship" class="block text-sm font-medium text-gray-700 mt-2 mb-1"> (今回のお車の記名被保険者予定者との続柄) </label>
+                  <input type="text" id="secondCarMainDriverRelationship" name="secondCarMainDriverRelationship" value="${formData.secondCarMainDriverRelationship}" placeholder="例:本人、配偶者、同居の母など" class="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[#CC0022] focus:border-[#CC0022]">
+                </div>
+                <div class="col-span-1 md:col-span-2">
+                  <label for="secondCarType" class="block text-sm font-medium text-gray-700 mb-1">お車の種類</label>
+                  <input type="text" id="secondCarType" name="secondCarType" value="${formData.secondCarType}" placeholder="例:自家用普通乗用車、自家用軽四輪乗用車など" class="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[#CC0022] focus:border-[#CC0022]">
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
+
+        // イベントリスナーの設定
+        contentEl.querySelectorAll('input[name="hasCurrentInsurance"]').forEach(input => {
+          input.addEventListener('change', (e) => {
+            const val = e.target.value;
+            updateFormDataAndRender('hasCurrentInsurance', val);
+            document.getElementById('current-insurance-details').classList.toggle('hidden', val !== 'はい');
+            if (val === 'いいえ') {
+              // 「いいえ」を選択した場合、関連するフィールドをクリア
+              updateFormDataAndRender({
+                currentInsuranceCompany: '', currentPolicyNumber: '', currentPolicyEndDate: '',
+                currentNonFleetGrade: '', accidentFactorApplicablePeriod: '',
+                previousAccidentCount: '', previousAccidentDetailCount: ''
+              });
+            }
+          });
+        });
+
+        contentEl.querySelectorAll('input[name="previousAccidentCount"]').forEach(input => {
+          input.addEventListener('change', (e) => {
+            const val = e.target.value;
+            updateFormDataAndRender('previousAccidentCount', val);
+            document.getElementById('previousAccidentDetailCount').classList.toggle('hidden', val !== 'あり');
+            if (val === 'なし') {
+              updateFormDataAndRender('previousAccidentDetailCount', '');
+            }
+          });
+        });
+
+        contentEl.querySelectorAll('input[name="hasSecondCar"]').forEach(input => {
+          input.addEventListener('change', (e) => {
+            const val = e.target.value;
+            updateFormDataAndRender('hasSecondCar', val);
+            document.getElementById('second-car-details').classList.toggle('hidden', val !== 'はい');
+            if (val === 'いいえ') {
+              // 「いいえ」を選択した場合、関連するフィールドをクリア
+              updateFormDataAndRender({
+                secondCarInsuranceCompany: '', secondCarPolicyNumber: '', secondCarPolicyEndDate: '',
+                secondCarNonFleetGrade: '', secondCarContractorName: '', secondCarContractorRelationship: '',
+                secondCarMainDriverName: '', secondCarMainDriverRelationship: '', secondCarType: ''
+              });
+            }
+          });
+        });
+
+        contentEl.querySelectorAll('input[type="text"], input[type="date"], input[type="number"]').forEach(input => {
+          input.addEventListener('input', (e) => updateFormDataAndRender(e.target.name, e.target.value));
+        });
+
+        // 初回レンダリング時の表示制御
+        document.getElementById('current-insurance-details').classList.toggle('hidden', formData.hasCurrentInsurance !== 'はい');
+        document.getElementById('previousAccidentDetailCount').classList.toggle('hidden', formData.previousAccidentCount !== 'あり');
+        document.getElementById('second-car-details').classList.toggle('hidden', formData.hasSecondCar !== 'はい');
+      }
+
+      // Insurance Period Form
+      function renderInsurancePeriodForm() {
+        const contentEl = document.getElementById('app-content');
+        contentEl.innerHTML = `
+          <div class="p-6 bg-white rounded-lg shadow-md border border-gray-200">
+            <h2 class="text-2xl font-bold text-gray-800 mb-6">4. 保険期間</h2>
+
+            <div class="mb-6">
+              <label class="block text-gray-700 text-lg font-medium mb-3">ご希望の保険期間</label>
+              <div class="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-6">
+                <label class="inline-flex items-center cursor-pointer">
+                  <input type="radio" name="desiredInsurancePeriod" value="1年" class="form-radio h-5 w-5 text-[#CC0022] border-gray-300 focus:ring-[#CC0022] rounded-full" ${formData.desiredInsurancePeriod === '1年' ? 'checked' : ''}>
+                  <span class="ml-3 text-lg text-gray-800">1年</span>
+                </label>
+                <label class="inline-flex items-center cursor-pointer">
+                  <input type="radio" name="desiredInsurancePeriod" value="複数年" class="form-radio h-5 w-5 text-[#CC0022] border-gray-300 focus:ring-[#CC0022] rounded-full" ${formData.desiredInsurancePeriod === '複数年' ? 'checked' : ''}>
+                  <span class="ml-3 text-lg text-gray-800">複数年 (最長3年)</span>
+                </label>
+              </div>
+              <div id="multi-year-period-fields" class="mt-4 ${formData.desiredInsurancePeriod === '複数年' ? '' : 'hidden'}">
+                <label for="multiYearPeriod" class="block text-sm font-medium text-gray-700 mb-1">年数</label>
+                <input type="number" id="multiYearPeriod" name="multiYearPeriod" value="${formData.multiYearPeriod || ''}" min="2" max="3" class="w-full max-w-[100px] px-4 py-2 border border-gray-300 rounded-md focus:ring-[#CC0022] focus:border-[#CC0022]">
+                <span class="ml-2 text-gray-700">年</span>
+              </div>
+            </div>
+
+            <div class="mb-6">
+              <label for="insuranceStartDate" class="block text-gray-700 text-lg font-medium mb-3">保険始期(開始日)</label>
+              <input type="date" id="insuranceStartDate" name="insuranceStartDate" value="${formData.insuranceStartDate}" class="w-full px-4 py-3 border border-gray-300 rounded-md focus:ring-[#CC0022] focus:border-[#CC0022] text-lg">
+            </div>
+          </div>
+        `;
+
+        // イベントリスナーの設定
+        contentEl.querySelectorAll('input[name="desiredInsurancePeriod"]').forEach(input => {
+          input.addEventListener('change', (e) => {
+            const val = e.target.value;
+            updateFormDataAndRender('desiredInsurancePeriod', val);
+            document.getElementById('multi-year-period-fields').classList.toggle('hidden', val !== '複数年');
+            if (val === '1年') {
+              updateFormDataAndRender('multiYearPeriod', '');
+            }
+          });
+        });
+
+        contentEl.querySelectorAll('input[type="date"], input[type="number"]').forEach(input => {
+          input.addEventListener('input', (e) => updateFormDataAndRender(e.target.name, e.target.value));
+        });
+
+        // 初回レンダリング時の表示制御
+        document.getElementById('multi-year-period-fields').classList.toggle('hidden', formData.desiredInsurancePeriod !== '複数年');
+      }
+
+      // Coverage Options Form
+      function renderCoverageOptionsForm() {
+        const contentEl = document.getElementById('app-content');
+        contentEl.innerHTML = `
+          <div class="p-6 bg-white rounded-lg shadow-md border border-gray-200">
+            <h2 class="text-2xl font-bold text-gray-800 mb-6">5. ご希望の補償内容について (今回ご契約されるお車)</h2>
+
+            <!-- (1) 基本となる補償 -->
+            <div class="mb-8 p-6 border border-gray-300 rounded-lg bg-gray-50">
+              <h3 class="text-xl font-bold text-gray-800 mb-4">(1) 基本となる補償</h3>
+
+              <div class="mb-6 pb-4 border-b border-gray-200">
+                <label class="block text-gray-700 text-lg font-medium mb-2">対人賠償保険</label>
+                <div class="flex items-center mb-2">
+                  <label class="inline-flex items-center cursor-pointer">
+                    <input type="radio" name="personalLiabilityInsurance" value="無制限" class="form-radio h-5 w-5 text-[#CC0022] border-gray-300 focus:ring-[#CC0022] rounded-full" ${formData.personalLiabilityInsurance === '無制限' ? 'checked' : ''}>
+                    <span class="ml-3 text-gray-800">無制限</span>
+                  </label>
+                </div>
+                <p class="text-sm text-gray-600">お相手の方のおケガや万一の場合の補償でございます。</p>
+              </div>
+
+              <div class="mb-6 pb-4 border-b border-gray-200">
+                <label class="block text-gray-700 text-lg font-medium mb-2">対物賠償保険</label>
+                <div class="flex flex-col sm:flex-row sm:items-center space-y-2 sm:space-y-0 sm:space-x-4 mb-2">
+                  <label class="inline-flex items-center cursor-pointer">
+                    <input type="radio" name="propertyLiabilityInsurance" value="無制限" class="form-radio h-5 w-5 text-[#CC0022] border-gray-300 focus:ring-[#CC0022] rounded-full" ${formData.propertyLiabilityInsurance === '無制限' ? 'checked' : ''}>
+                    <span class="ml-3 text-gray-800">無制限</span>
+                  </label>
+                  <label class="inline-flex items-center cursor-pointer">
+                    <input type="radio" name="propertyLiabilityInsurance" value="その他" class="form-radio h-5 w-5 text-[#CC0022] border-gray-300 focus:ring-[#CC0022] rounded-full" ${formData.propertyLiabilityInsurance === 'その他' ? 'checked' : ''}>
+                    <span class="ml-3 text-gray-800">その他</span>
+                  </label>
+                  <div id="propertyLiabilityOtherAmount-field" class="flex items-center ${formData.propertyLiabilityInsurance === 'その他' ? '' : 'hidden'}">
+                    <input type="number" name="propertyLiabilityOtherAmount" value="${formData.propertyLiabilityOtherAmount || ''}" class="w-24 px-3 py-1 border border-gray-300 rounded-md focus:ring-[#CC0022] focus:border-[#CC0022]">
+                    <span class="ml-2 text-gray-700">万円</span>
+                  </div>
+                </div>
+                <p class="text-sm text-gray-600 mb-2">お相手のお車や物に対する補償でございます。</p>
+
+                <label class="block text-gray-700 font-medium mb-2">自己負担額 (免責金額)</label>
+                <div class="flex flex-wrap gap-4">
+                  ${['なし', '5万円', '10万円', 'その他'].map(amount => `
+                    <label class="flex items-center px-4 py-2 border rounded-full cursor-pointer transition-colors duration-200 ${formData.propertyLiabilityDeductible === amount ? 'bg-[#CC0022] text-white border-[#CC0022] shadow-md' : 'bg-gray-100 text-gray-700 border-gray-300 hover:bg-gray-200'}">
+                      <input type="radio" name="propertyLiabilityDeductible" value="${amount}" class="hidden" ${formData.propertyLiabilityDeductible === amount ? 'checked' : ''}>
+                      <span class="font-semibold">${amount}</span>
+                    </label>
+                  `).join('')}
+                  <div id="propertyLiabilityDeductibleOtherAmount-field" class="flex items-center ${formData.propertyLiabilityDeductible === 'その他' ? '' : 'hidden'}">
+                    <input type="number" name="propertyLiabilityDeductibleOtherAmount" value="${formData.propertyLiabilityDeductibleOtherAmount || ''}" class="w-24 px-3 py-1 border border-gray-300 rounded-md focus:ring-[#CC0022] focus:border-[#CC0022]">
+                    <span class="ml-2 text-gray-700">万円</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="mb-6 pb-4 border-b border-gray-200">
+                <label class="block text-gray-700 text-lg font-medium mb-2">人身傷害保険</label>
+                <div class="flex flex-col sm:flex-row sm:items-center space-y-2 sm:space-y-0 sm:space-x-4 mb-2">
+                  ${['無制限', '1億円', '7,000万円', 'その他'].map(amount => `
+                    <label class="flex items-center px-4 py-2 border rounded-full cursor-pointer transition-colors duration-200 ${formData.personalInjuryInsurance === amount ? 'bg-[#CC0022] text-white border-[#CC0022] shadow-md' : 'bg-gray-100 text-gray-700 border-gray-300 hover:bg-gray-400'}">
+                      <input type="radio" name="personalInjuryInsurance" value="${amount}" class="hidden" ${formData.personalInjuryInsurance === amount ? 'checked' : ''}>
+                      <span class="font-semibold">${amount}</span>
+                    </label>
+                  `).join('')}
+                  <div id="personalInjuryOtherAmount-field" class="flex items-center ${formData.personalInjuryInsurance === 'その他' ? '' : 'hidden'}">
+                    <input type="number" name="personalInjuryOtherAmount" value="${formData.personalInjuryOtherAmount || ''}" class="w-24 px-3 py-1 border border-gray-300 rounded-md focus:ring-[#CC0022] focus:border-[#CC0022]">
+                    <span class="ml-2 text-gray-700">万円</span>
+                  </div>
+                </div>
+                <p class="text-sm text-gray-600 mb-2">
+                  お客様ご自身や同乗者の方のおケガや万一の場合の補償でございます。治療費、休業損害、精神的損害などをお支払いします。無制限をオススメしております。
+                </p>
+
+                <label class="block text-gray-700 font-medium mb-2">(補償範囲)</label>
+                <div class="flex flex-col space-y-2">
+                  <label class="inline-flex items-center cursor-pointer">
+                    <input type="radio" name="personalInjuryCoverageScope" value="お車に搭乗中のみ補償" class="form-radio h-5 w-5 text-[#CC0022] border-gray-300 focus:ring-[#CC0022] rounded-full" ${formData.personalInjuryCoverageScope === 'お車に搭乗中のみ補償' ? 'checked' : ''}>
+                    <span class="ml-3 text-gray-800">お車に搭乗中のみ補償</span>
+                  </label>
+                  <label class="inline-flex items-center cursor-pointer">
+                    <input type="radio" name="personalInjuryCoverageScope" value="お車に搭乗中以外(歩行中など)の自動車事故も補償" class="form-radio h-5 w-5 text-[#CC0022] border-gray-300 focus:ring-[#CC0022] rounded-full" ${formData.personalInjuryCoverageScope === 'お車に搭乗中以外(歩行中など)の自動車事故も補償' ? 'checked' : ''}>
+                    <span class="ml-3 text-gray-800">お車に搭乗中以外 (歩行中など)の自動車事故も補償</span>
+                  </label>
+                </div>
+              </div>
+
+              <div class="mb-6 pb-4 border-b border-gray-200">
+                <label class="block text-gray-700 text-lg font-medium mb-2">人身傷害入院時定額給付金</label>
+                <div class="flex space-x-4 mb-2">
+                  <label class="inline-flex items-center cursor-pointer">
+                    <input type="radio" name="personalInjuryInpatientAllowance" value="希望する (10万円)" class="form-radio h-5 w-5 text-[#CC0022] border-gray-300 focus:ring-[#CC0022] rounded-full" ${formData.personalInjuryInpatientAllowance === '希望する (10万円)' ? 'checked' : ''}>
+                    <span class="ml-3 text-gray-800">希望する (一時金10万円)</span>
+                  </label>
+                  <label class="inline-flex items-center cursor-pointer">
+                    <input type="radio" name="personalInjuryInpatientAllowance" value="希望しない (対象外)" class="form-radio h-5 w-5 text-[#CC0022] border-gray-300 focus:ring-[#CC0022] rounded-full" ${formData.personalInjuryInpatientAllowance === '希望しない (対象外)' ? 'checked' : ''}>
+                    <span class="ml-3 text-gray-800">希望しない (対象外)</span>
+                  </label>
+                </div>
+                <p class="text-sm text-gray-600">
+                  人身傷害保険の対象となる事故で入通院日数が5日以上となった場合は、治療費等の実費とは別にあらかじめ定めた額をお支払いします。
+                </p>
+              </div>
+
+              <div class="mb-6">
+                <label class="block text-gray-700 text-lg font-medium mb-2">人身傷害死亡・後遺障害定額給付金特約</label>
+                <div class="flex flex-col sm:flex-row sm:items-center space-y-2 sm:space-y-0 sm:space-x-4 mb-2">
+                  <label class="inline-flex items-center cursor-pointer">
+                    <input type="radio" name="personalInjuryDeathDisabilityAllowance" value="希望する" class="form-radio h-5 w-5 text-[#CC0022] border-gray-300 focus:ring-[#CC0022] rounded-full" ${formData.personalInjuryDeathDisabilityAllowance === '希望する' ? 'checked' : ''}>
+                    <span class="ml-3 text-gray-800">希望する</span>
+                  </label>
+                  <div id="personalInjuryDeathDisabilityAmount-field" class="flex items-center ${formData.personalInjuryDeathDisabilityAllowance === '希望する' ? '' : 'hidden'}">
+                    <input type="number" name="personalInjuryDeathDisabilityAmount" value="${formData.personalInjuryDeathDisabilityAmount || ''}" class="w-24 px-3 py-1 border border-gray-300 rounded-md focus:ring-[#CC0022] focus:border-[#CC0022]">
+                    <span class="ml-2 text-gray-700">万円</span>
+                  </div>
+                  <label class="inline-flex items-center cursor-pointer">
+                    <input type="radio" name="personalInjuryDeathDisabilityAllowance" value="希望しない" class="form-radio h-5 w-5 text-[#CC0022] border-gray-300 focus:ring-[#CC0022] rounded-full" ${formData.personalInjuryDeathDisabilityAllowance === '希望しない' ? 'checked' : ''}>
+                    <span class="ml-3 text-gray-800">希望しない</span>
+                  </label>
+                </div>
+                <p class="text-sm text-gray-600">
+                  死亡時は保険金全額、後遺障害時は程度に応じ4~100%を給付する特約です。
+                </p>
+              </div>
+            </div>
+
+            <!-- (2) お車自体の保険(車両保険) -->
+            <div class="mb-8 p-6 border border-gray-300 rounded-lg bg-gray-50">
+              <h3 class="text-xl font-bold text-gray-800 mb-4">(2) お車自体の保険(車両保険)</h3>
+
+              <div class="mb-6 pb-4 border-b border-gray-200">
+                <label class="block text-gray-700 text-lg font-medium mb-2">車両保険のタイプ</label>
+                <div class="flex flex-col space-y-2">
+                  <label class="flex items-center p-3 border rounded-lg cursor-pointer transition-colors duration-200">
+                    <input type="radio" name="vehicleInsuranceType" value="一般条件(オールリスクタイプ)" class="form-radio h-5 w-5 text-[#CC0022] border-gray-300 focus:ring-[#CC0022] rounded-full" ${formData.vehicleInsuranceType === '一般条件(オールリスクタイプ)' ? 'checked' : ''}>
+                    <span class="ml-3 text-gray-800">一般条件(オールリスクタイプ)</span>
+                    <p class="ml-auto text-sm text-gray-600">・単独事故や当て逃げも補償対象です。</p>
+                  </label>
+                  <label class="flex items-center p-3 border rounded-lg cursor-pointer transition-colors duration-200">
+                    <input type="radio" name="vehicleInsuranceType" value="エコノミータイプ (車対車+限定Aなど)" class="form-radio h-5 w-5 text-[#CC0022] border-gray-300 focus:ring-[#CC0022] rounded-full" ${formData.vehicleInsuranceType === 'エコノミータイプ (車対車+限定Aなど)' ? 'checked' : ''}>
+                    <span class="ml-3 text-gray-800">エコノミータイプ (車対車+限定Aなど)</span>
+                    <p class="ml-auto text-sm text-gray-600">・主に相手自動車との衝突事故などが対象となります。</p>
+                  </label>
+                  <label class="flex items-center p-3 border rounded-lg cursor-pointer transition-colors duration-200">
+                    <input type="radio" name="vehicleInsuranceType" value="希望しない" class="form-radio h-5 w-5 text-[#CC0022] border-gray-300 focus:ring-[#CC0022] rounded-full" ${formData.vehicleInsuranceType === '希望しない' ? 'checked' : ''}>
+                    <span class="ml-3 text-gray-800">希望しない</span>
+                  </label>
+                </div>
+              </div>
+
+              <div id="vehicle-insurance-details" class="${formData.vehicleInsuranceType !== '希望しない' ? '' : 'hidden'}">
+                <div class="mb-6 pb-4 border-b border-gray-200">
+                  <label class="block text-gray-700 text-lg font-medium mb-2">保険金額 (協定保険価額)</label>
+                  <div class="flex items-center">
+                    <input type="number" name="vehicleInsuranceAmount" value="${formData.vehicleInsuranceAmount || ''}" class="w-32 px-4 py-2 border border-gray-300 rounded-md focus:ring-[#CC0022] focus:border-[#CC0022]">
+                    <span class="ml-2 text-gray-700">万円</span>
+                  </div>
+                  <p class="text-sm text-gray-600 mt-2">お車の年式・型式から設定させていただきます。</p>
+                </div>
+
+                <div class="mb-6">
+                  <label class="block text-gray-700 text-lg font-medium mb-3">自己負担額 (免責金額)</label>
+                  <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
+                    <div>
+                      <label class="block text-sm font-medium text-gray-700 mb-2">1回目:</label>
+                      <div class="flex flex-wrap gap-3">
+                        ${['なし', '3万円', '5万円', '10万円'].map(amount => `
+                          <label class="flex items-center px-4 py-2 border rounded-full cursor-pointer transition-colors duration-200 ${formData.vehicleInsuranceDeductibleFirst === amount ? 'bg-[#CC0022] text-white border-[#CC0022] shadow-md' : 'bg-gray-100 text-gray-700 border-gray-300 hover:bg-gray-200'}">
+                            <input type="radio" name="vehicleInsuranceDeductibleFirst" value="${amount}" class="hidden" ${formData.vehicleInsuranceDeductibleFirst === amount ? 'checked' : ''}>
+                            <span class="font-semibold">${amount}</span>
+                          </label>
+                        `).join('')}
+                      </div>
+                    </div>
+                    <div>
+                      <label class="block text-sm font-medium text-gray-700 mb-2">2回目以降:</label>
+                      <div class="flex flex-wrap gap-3">
+                        ${['なし', '5万円', '10万円'].map(amount => `
+                          <label class="flex items-center px-4 py-2 border rounded-full cursor-pointer transition-colors duration-200 ${formData.vehicleInsuranceDeductibleSecond === amount ? 'bg-[#CC0022] text-white border-[#CC0022] shadow-md' : 'bg-gray-100 text-gray-700 border-gray-300 hover:bg-gray-200'}">
+                            <input type="radio" name="vehicleInsuranceDeductibleSecond" value="${amount}" class="hidden" ${formData.vehicleInsuranceDeductibleSecond === amount ? 'checked' : ''}>
+                            <span class="font-semibold">${amount}</span>
+                          </label>
+                        `).join('')}
+                      </div>
+                      <p class="text-sm text-gray-600 mt-2">1回目の事故 / 2回目以降の事故</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- (3) 主な特約 -->
+            <div class="p-6 border border-gray-300 rounded-lg bg-gray-50">
+              <h3 class="text-xl font-bold text-gray-800 mb-4">(3) 主な特約 (ご希望に応じてお付けできます)</h3>
+              <p class="text-sm text-gray-600 mb-4">要否をお選びください</p>
+
+              <div class="flex items-start mb-6 p-4 border border-gray-200 rounded-md bg-white">
+                <label class="flex items-center cursor-pointer mt-1">
+                  <input type="checkbox" name="lawyerFeeSpecialClause" class="form-checkbox h-5 w-5 text-[#CC0022] rounded" ${formData.lawyerFeeSpecialClause ? 'checked' : ''}>
+                  <span class="ml-3 text-lg font-medium text-gray-800">弁護士費用特約</span>
+                </label>
+                <p class="ml-auto text-sm text-gray-600 max-w-sm">
+                  もらい事故などでお困りの際に、弁護士へのご相談や依頼にかかる費用を補償いたします。
+                </p>
+              </div>
+
+              <div class="flex items-start mb-6 p-4 border border-gray-200 rounded-md bg-white">
+                <label class="flex items-center cursor-pointer mt-1">
+                  <input type="checkbox" name="personalLiabilitySpecialClause" class="form-checkbox h-5 w-5 text-[#CC0022] rounded" ${formData.personalLiabilitySpecialClause ? 'checked' : ''}>
+                  <span class="ml-3 text-lg font-medium text-gray-800">個人賠償責任特約 (自動車事故以外も対応)</span>
+                </label>
+                <p class="ml-auto text-sm text-gray-600 max-w-sm">
+                  日常生活での賠償事故を補償いたします(火災保険などに付帯されているかご確認ください)。
+                </p>
+              </div>
+
+              <div class="flex items-start mb-6 p-4 border border-gray-200 rounded-md bg-white">
+                <label class="flex items-center cursor-pointer mt-1">
+                  <input type="checkbox" name="newCarSpecialClause" class="form-checkbox h-5 w-5 text-[#CC0022] rounded" ${formData.newCarSpecialClause ? 'checked' : ''}>
+                  <span class="ml-3 text-lg font-medium text-gray-800">新車特約 (新車登録から一定期間お付けできます)</span>
+                </label>
+                <p class="ml-auto text-sm text-gray-600 max-w-sm">
+                  お車が大きな損害を被った場合に、新車価格相当額を補償する特約でございます。
+                </p>
+              </div>
+
+              <div class="flex items-start mb-6 p-4 border border-gray-200 rounded-md bg-white">
+                <label class="flex items-center cursor-pointer mt-1">
+                  <input type="checkbox" name="totalLossRecoverySpecialClause" class="form-checkbox h-5 w-5 text-[#CC0022] rounded" ${formData.totalLossRecoverySpecialClause ? 'checked' : ''}>
+                  <span class="ml-3 text-lg font-medium text-gray-800">車両全損時復旧費用特約</span>
+                </label>
+                <p class="ml-auto text-sm text-gray-600 max-w-sm">
+                  ご契約の車が全損になった際、再取得費用や修理費を上限額までお支払いする特約です。
+                </p>
+              </div>
+
+              <div class="flex items-start mb-6 p-4 border border-gray-200 rounded-md bg-white">
+                <label class="flex items-center cursor-pointer mt-1">
+                  <input type="checkbox" name="rentalCarAllowanceSpecialClause" class="form-checkbox h-5 w-5 text-[#CC0022] rounded" ${formData.rentalCarAllowanceSpecialClause ? 'checked' : ''}>
+                  <span class="ml-3 text-lg font-medium text-gray-800">代車等諸費用特約</span>
+                </label>
+                <div class="ml-auto flex flex-col items-end">
+                  <div id="rentalCarDailyAmount-field" class="flex items-center mb-2 ${formData.rentalCarAllowanceSpecialClause ? '' : 'hidden'}">
+                    <span class="mr-2 text-sm text-gray-700">代車日額:</span>
+                    <input type="number" name="rentalCarDailyAmount" value="${formData.rentalCarDailyAmount || ''}" class="w-24 px-3 py-1 border border-gray-300 rounded-md focus:ring-[#CC0022] focus:border-[#CC0022]">
+                    <span class="ml-2 text-gray-700">円</span>
+                  </div>
+                  <p class="text-sm text-gray-600 max-w-sm text-right">
+                    事故や故障で車が動かなくなりレッカー移動した場合、所定の費用をお支払いします。事故時の代車費用は、走行不能でなくてもお支払い対象です。
+                  </p>
+                </div>
+              </div>
+
+              <div class="mb-6">
+                <label for="otherSpecialClauses" class="block text-gray-700 text-lg font-medium mb-2">
+                  その他にご希望の特約がございましたらご記入ください。
+                </label>
+                <textarea id="otherSpecialClauses" name="otherSpecialClauses" rows="3" class="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[#CC0022] focus:border-[#CC0022]" placeholder="例: ファミリーバイク特約、個人賠償責任特約など">${formData.otherSpecialClauses}</textarea>
+              </div>
+
+              <div class="mb-6">
+                <label for="hasDashCam" class="block text-gray-700 text-lg font-medium mb-2">
+                  ドライブレコーダー等ありましたらご記入ください。
+                </label>
+                <input type="text" id="hasDashCam" name="hasDashCam" value="${formData.hasDashCam}" class="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[#CC0022] focus:border-[#CC0022]" placeholder="例: 前後ドラレコ、360度カメラ">
+              </div>
+            </div>
+          </div>
+        `;
+
+        // イベントリスナーの設定
+        contentEl.querySelectorAll('input[name="personalLiabilityInsurance"]').forEach(input => {
+          input.addEventListener('change', (e) => updateFormDataAndRender(e.target.name, e.target.value));
+        });
+
+        contentEl.querySelectorAll('input[name="propertyLiabilityInsurance"]').forEach(input => {
+          input.addEventListener('change', (e) => {
+            const val = e.target.value;
+            updateFormDataAndRender(e.target.name, val);
+            document.getElementById('propertyLiabilityOtherAmount-field').classList.toggle('hidden', val !== 'その他');
+            if (val !== 'その他') updateFormDataAndRender('propertyLiabilityOtherAmount', '');
+          });
+        });
+
+        contentEl.querySelectorAll('input[name="propertyLiabilityDeductible"]').forEach(input => {
+          input.addEventListener('change', (e) => {
+            const val = e.target.value;
+            updateFormDataAndRender(e.target.name, val);
+            document.getElementById('propertyLiabilityDeductibleOtherAmount-field').classList.toggle('hidden', val !== 'その他');
+            if (val !== 'その他') updateFormDataAndRender('propertyLiabilityDeductibleOtherAmount', '');
+          });
+        });
+
+        contentEl.querySelectorAll('input[name="personalInjuryInsurance"]').forEach(input => {
+          input.addEventListener('change', (e) => {
+            const val = e.target.value;
+            updateFormDataAndRender(e.target.name, val);
+            document.getElementById('personalInjuryOtherAmount-field').classList.toggle('hidden', val !== 'その他');
+            if (val !== 'その他') updateFormDataAndRender('personalInjuryOtherAmount', '');
+          });
+        });
+
+        contentEl.querySelectorAll('input[name="personalInjuryCoverageScope"]').forEach(input => {
+          input.addEventListener('change', (e) => updateFormDataAndRender(e.target.name, e.target.value));
+        });
+
+        contentEl.querySelectorAll('input[name="personalInjuryInpatientAllowance"]').forEach(input => {
+          input.addEventListener('change', (e) => updateFormDataAndRender(e.target.name, e.target.value));
+        });
+
+        contentEl.querySelectorAll('input[name="personalInjuryDeathDisabilityAllowance"]').forEach(input => {
+          input.addEventListener('change', (e) => {
+            const val = e.target.value;
+            updateFormDataAndRender(e.target.name, val);
+            document.getElementById('personalInjuryDeathDisabilityAmount-field').classList.toggle('hidden', val !== '希望する');
+            if (val !== '希望する') updateFormDataAndRender('personalInjuryDeathDisabilityAmount', '');
+          });
+        });
+
+        contentEl.querySelectorAll('input[name="vehicleInsuranceType"]').forEach(input => {
+          input.addEventListener('change', (e) => {
+            const val = e.target.value;
+            updateFormDataAndRender(e.target.name, val);
+            document.getElementById('vehicle-insurance-details').classList.toggle('hidden', val === '希望しない');
+            if (val === '希望しない') {
+              updateFormDataAndRender({
+                vehicleInsuranceAmount: '', vehicleInsuranceDeductibleFirst: '', vehicleInsuranceDeductibleSecond: ''
+              });
+            }
+          });
+        });
+
+        contentEl.querySelectorAll('input[name="vehicleInsuranceDeductibleFirst"], input[name="vehicleInsuranceDeductibleSecond"]').forEach(input => {
+          input.addEventListener('change', (e) => updateFormDataAndRender(e.target.name, e.target.value));
+        });
+
+        contentEl.querySelectorAll('input[type="checkbox"]').forEach(input => {
+          input.addEventListener('change', (e) => {
+            const name = e.target.name;
+            const checked = e.target.checked;
+            updateFormDataAndRender(name, checked);
+            if (name === 'rentalCarAllowanceSpecialClause') {
+              document.getElementById('rentalCarDailyAmount-field').classList.toggle('hidden', !checked);
+              if (!checked) updateFormDataAndRender('rentalCarDailyAmount', '');
+            }
+          });
+        });
+
+        contentEl.querySelectorAll('input[type="text"], input[type="number"], textarea').forEach(input => {
+          input.addEventListener('input', (e) => updateFormDataAndRender(e.target.name, e.target.value));
+        });
+
+        // 初回レンダリング時の表示制御
+        document.getElementById('propertyLiabilityOtherAmount-field').classList.toggle('hidden', formData.propertyLiabilityInsurance !== 'その他');
+        document.getElementById('propertyLiabilityDeductibleOtherAmount-field').classList.toggle('hidden', formData.propertyLiabilityDeductible !== 'その他');
+        document.getElementById('personalInjuryOtherAmount-field').classList.toggle('hidden', formData.personalInjuryInsurance !== 'その他');
+        document.getElementById('personalInjuryDeathDisabilityAmount-field').classList.toggle('hidden', formData.personalInjuryDeathDisabilityAllowance !== '希望する');
+        document.getElementById('vehicle-insurance-details').classList.toggle('hidden', formData.vehicleInsuranceType === '希望しない');
+        document.getElementById('rentalCarDailyAmount-field').classList.toggle('hidden', !formData.rentalCarAllowanceSpecialClause);
+      }
+
+      // Payment And Notes Form
+      function renderPaymentAndNotesForm() {
+        const contentEl = document.getElementById('app-content');
+        contentEl.innerHTML = `
+          <div class="p-6 bg-white rounded-lg shadow-md border border-gray-200">
+            <h2 class="text-2xl font-bold text-gray-800 mb-6">6. 保険料のお支払い方法について</h2>
+
+            <div class="mb-8 pb-4 border-b border-gray-200">
+              <label class="block text-gray-700 text-lg font-medium mb-3">ご希望のお支払い方法をお選びください</label>
+              <div class="flex flex-wrap gap-4">
+                ${['口座振替', 'クレジットカード', 'その他'].map(method => `
+                  <label class="flex items-center px-4 py-2 border rounded-full cursor-pointer transition-colors duration-200 ${formData.paymentMethod === method ? 'bg-[#CC0022] text-white border-[#CC0022] shadow-md' : 'bg-gray-100 text-gray-700 border-gray-300 hover:bg-gray-200'}">
+                    <input type="radio" name="paymentMethod" value="${method}" class="hidden" ${formData.paymentMethod === method ? 'checked' : ''}>
+                    <span class="font-semibold">${method}</span>
+                  </label>
+                `).join('')}
+                <input type="text" id="paymentMethodOther" name="paymentMethodOther" value="${formData.paymentMethodOther}" class="w-32 px-3 py-1 border border-gray-300 rounded-md focus:ring-[#CC0022] focus:border-[#CC0022] ${formData.paymentMethod === 'その他' ? '' : 'hidden'}" placeholder="具体的にお書きください">
+              </div>
+            </div>
+
+            <div class="mb-8">
+              <label class="block text-gray-700 text-lg font-medium mb-3">お支払い回数</label>
+              <div class="flex flex-wrap gap-4">
+                ${['一時払', '年払', '月払'].map(frequency => `
+                  <label class="flex items-center px-4 py-2 border rounded-full cursor-pointer transition-colors duration-200 ${formData.paymentFrequency === frequency ? 'bg-[#CC0022] text-white border-[#CC0022] shadow-md' : 'bg-gray-100 text-gray-700 border-gray-300 hover:bg-gray-200'}">
+                    <input type="radio" name="paymentFrequency" value="${frequency}" class="hidden" ${formData.paymentFrequency === frequency ? 'checked' : ''}>
+                    <span class="font-semibold">${frequency}</span>
+                  </label>
+                `).join('')}
+              </div>
+            </div>
+
+            <h2 class="text-2xl font-bold text-gray-800 mb-6">7. その他・ご要望など</h2>
+
+            <div class="mb-6">
+              <label for="desiredPlan" class="block text-gray-700 text-lg font-medium mb-2">
+                お見積りプランについてのご希望 (例:保険料を抑えたい、補償内容を充実させたいなど)
+              </label>
+              <textarea id="desiredPlan" name="desiredPlan" rows="4" class="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[#CC0022] focus:border-[#CC0022]">${formData.desiredPlan}</textarea>
+            </div>
+
+            <div class="mb-6">
+              <label for="importantPoints" class="block text-gray-700 text-lg font-medium mb-2">
+                特に重視される点 (保険料の安さ、事故対応の評判、ロードサービスの充実度など)
+              </label>
+              <textarea id="importantPoints" name="importantPoints" rows="4" class="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[#CC0022] focus:border-[#CC0022]">${formData.importantPoints}</textarea>
+            </div>
+
+            <div class="mb-6">
+              <label for="otherQuestions" class="block text-gray-700 text-lg font-medium mb-2">
+                その他、ご質問やご要望などがございましたら、ご遠慮なくお書きください。
+              </label>
+              <textarea id="otherQuestions" name="otherQuestions" rows="4" class="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[#CC0022] focus:border-[#CC0022]">${formData.otherQuestions}</textarea>
+            </div>
+
+            <!-- 同意チェックボックスの追加 -->
+            <div class="bg-blue-50 border-l-4 border-blue-400 text-blue-800 p-4 rounded-md mt-8" role="alert">
+              <label class="inline-flex items-center cursor-pointer">
+                <input type="checkbox" id="consentToSubmit" name="consentToSubmit" class="form-checkbox h-5 w-5 text-[#CC0022] rounded" ${formData.consentToSubmit ? 'checked' : ''}>
+                <span class="ml-3 font-semibold text-lg">
+                  上記記入内容に基づき、保険のお見積り・ご提案をさせていただくことに同意いたします。
+                </span>
+              </label>
+            </div>
+
+            <div class="mb-6 mt-6">
+                <label for="signature" class="block text-gray-700 text-lg font-medium mb-2">署名:</label>
+                <input type="text" id="signature" name="signature" value="${formData.signature}" class="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[#CC0022] focus:border-[#CC0022]">
+            </div>
+            <div class="mb-6">
+                <label class="block text-gray-700 text-lg font-medium mb-2">日付:</label>
+                <div class="flex items-center space-x-2">
+                    <input type="number" id="signYear" name="signYear" value="${formData.signYear}" class="w-24 px-4 py-2 border border-gray-300 rounded-md focus:ring-[#CC0022] focus:border-[#CC0022]" placeholder="YYYY">
+                    <span>年</span>
+                    <input type="number" id="signMonth" name="signMonth" value="${formData.signMonth}" class="w-20 px-4 py-2 border border-gray-300 rounded-md focus:ring-[#CC0022] focus:border-[#CC0022]" placeholder="MM">
+                    <span>月</span>
+                    <input type="number" id="signDay" name="signDay" value="${formData.signDay}" class="w-20 px-4 py-2 border border-gray-300 rounded-md focus:ring-[#CC0022] focus:border-[#CC0022]" placeholder="DD">
+                    <span>日</span>
+                </div>
+            </div>
+          </div>
+        `;
+
+        // イベントリスナーの設定
+        contentEl.querySelectorAll('input[name="paymentMethod"]').forEach(input => {
+          input.addEventListener('change', (e) => {
+            const val = e.target.value;
+            updateFormDataAndRender(e.target.name, val);
+            document.getElementById('paymentMethodOther').classList.toggle('hidden', val !== 'その他');
+            if (val !== 'その他') updateFormDataAndRender('paymentMethodOther', '');
+          });
+        });
+
+        contentEl.querySelectorAll('input[name="paymentFrequency"]').forEach(input => {
+          input.addEventListener('change', (e) => updateFormDataAndRender(e.target.name, e.target.value));
+        });
+
+        contentEl.querySelectorAll('input[type="text"], input[type="number"], textarea').forEach(input => {
+          input.addEventListener('input', (e) => updateFormDataAndRender(e.target.name, e.target.value));
+        });
+
+        // 同意チェックボックスのイベントリスナー
+        contentEl.querySelector('#consentToSubmit').addEventListener('change', (e) => {
+          updateFormDataAndRender('consentToSubmit', e.target.checked);
+        });
+
+        // 初回レンダリング時の表示制御
+        document.getElementById('paymentMethodOther').classList.toggle('hidden', formData.paymentMethod !== 'その他');
+      }
+
+      // Confirmation Screen
+      function renderConfirmationScreen() {
+        const contentEl = document.getElementById('app-content');
+        const incompleteFields = getIncompleteFields(formData);
+
+        const renderSection = (title, data, fields) => {
+          let sectionHtml = `
+            <div class="mb-8 p-6 border border-gray-300 rounded-lg bg-gray-50">
+              <h3 class="text-xl font-bold text-gray-800 mb-4 flex justify-between items-center">
+                ${title}
+                <button type="button" class="text-blue-600 hover:text-blue-800 text-sm font-semibold flex items-center edit-section-btn" data-section="${title}">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                  </svg>
+                  編集
+                </button>
+              </h3>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3 text-gray-700">
+          `;
+          fields.forEach(field => {
+            let displayValue;
+            if (typeof data[field.key] === 'boolean') {
+              displayValue = data[field.key] ? 'はい' : 'いいえ';
+            } else if (Array.isArray(data[field.key])) {
+              displayValue = data[field.key].length > 0
+                ? data[field.key].map(item => typeof item === 'object' ? JSON.stringify(item) : item).join(', ')
+                : '未入力';
+            } else {
+              displayValue = (data[field.key] !== null && data[field.key] !== undefined && String(data[field.key]).trim() !== '')
+                ? data[field.key]
+                : '未入力';
+            }
+            sectionHtml += `
+              <div class="flex flex-col">
+                <span class="font-medium text-gray-600 text-sm">${field.label}:</span>
+                <span class="text-gray-800 text-base break-words">${displayValue}</span>
+              </div>
+            `;
+          });
+          sectionHtml += `
+              </div>
+            </div>
+          `;
+          return sectionHtml;
+        };
+
+        contentEl.innerHTML = `
+          <div class="p-6 bg-white rounded-lg shadow-md border border-gray-200">
+            <h2 class="text-3xl font-bold text-gray-800 mb-8 text-center">入力内容のご確認</h2>
+            <p class="text-lg text-gray-600 mb-8 text-center">
+              ご入力いただいた内容をご確認ください。修正が必要な場合は「編集」ボタンをクリックしてください。
+            </p>
+
+            <div id="incomplete-fields-alert"></div>
+
+            <div id="pdf-content-to-capture">
+                <!-- Header Information for PDF -->
+                <div class="mb-8 p-6 bg-red-100 rounded-lg text-red-800 border border-red-200 section-highlight-red">
+                    <p class="mb-4 text-center">
+                        取扱代理店名: リバティ保険ショップ ([宇都宮店/宇都宮南店])
+                    </p>
+                    <p class="mb-4 text-center">
+                        参照書類: 新規受付票(受付日: 西暦${formData.receptionYear}年${formData.receptionMonth}月${formData.receptionDay}日)
+                    </p>
+                    <p class="text-center font-semibold">お客さまの氏名: ${formData.customerName} 様</p>
+                </div>
+
+              ${renderSection(
+                '1. お見積り対象のお車について',
+                formData,
+                [
+                  { label: '車検証の有無', key: 'hasVehicleInspectionCertificate' },
+                  { label: 'メーカー名', key: 'carManufacturer' },
+                  { label: '車名(通称名)', key: 'carModel' },
+                  { label: '型式', key: 'carType' },
+                  { label: '初度登録年月', key: 'firstRegistrationDate' },
+                  { label: '登録番号(ナンバープレート)', key: 'licensePlate' },
+                  { label: '車台番号', key: 'chassisNumber' },
+                  { label: 'お車の所有者様のお名前', key: 'carOwnerName' },
+                  { label: '主に運転される方', key: 'mainDriverIsApplicant' },
+                  { label: 'お名前', key: 'mainDriverName' },
+                  { label: '続柄', key: 'mainDriverRelationship' },
+                  { label: 'お車の主たるご使用目的', key: 'mainCarUsage' },
+                  { label: '搭載されている安全装置', key: 'safetyFeatures' },
+                  { label: 'その他安全装置', key: 'otherSafetyFeatures' },
+                ]
+              )}
+
+              ${renderSection(
+                '2. 運転される方の範囲や年齢条件について',
+                formData,
+                [
+                  { label: '運転免許証の色', key: 'mainDriverLicenseColor' },
+                  { label: '運転される方の範囲', key: 'driverCoverageRange' },
+                  { label: '運転される方の年齢条件', key: 'driverAgeCondition' },
+                  { label: 'その他運転者', key: 'otherDrivers' },
+                ]
+              )}
+
+              ${renderSection(
+                '3. 現在の自動車保険のご契約状況および複数所有新規割引の確認',
+                formData,
+                [
+                  { label: '現在、自動車保険に加入されていますか？', key: 'hasCurrentInsurance' },
+                  { label: '現在ご加入の保険会社名', key: 'currentInsuranceCompany' },
+                  { label: '証券番号', key: 'currentPolicyNumber' },
+                  { label: '保険期間(満期日)', key: 'currentPolicyEndDate' },
+                  { label: 'ノンフリート等級', key: 'currentNonFleetGrade' },
+                  { label: '事故有係数適用期間', key: 'accidentFactorApplicablePeriod' },
+                  { label: '前契約での事故件数', key: 'previousAccidentCount' },
+                  { label: '詳細事故件数', key: 'previousAccidentDetailCount' },
+                  { label: '1台目のお車はございますか?', key: 'hasSecondCar' },
+                  { label: '1台目保険会社名', key: 'secondCarInsuranceCompany' },
+                  { label: '1台目証券番号', key: 'secondCarPolicyNumber' },
+                  { label: '1台目保険の満期日', key: 'secondCarPolicyEndDate' },
+                  { label: '1台目ノンフリート等級', key: 'secondCarNonFleetGrade' },
+                  { label: '1台目ご契約者様のお名前', key: 'secondCarContractorName' },
+                  { label: '1台目ご契約者様との続柄', key: 'secondCarContractorRelationship' },
+                  { label: '1台目記名被保険者様のお名前', key: 'secondCarMainDriverName' },
+                  { label: '1台目記名被保険者様との続柄', key: 'secondCarMainDriverRelationship' },
+                  { label: '1台目お車の種類', key: 'secondCarType' },
+                ]
+              )}
+
+              ${renderSection(
+                '4. 保険期間',
+                formData,
+                [
+                  { label: 'ご希望の保険期間', key: 'desiredInsurancePeriod' },
+                  { label: '複数年数', key: 'multiYearPeriod' },
+                  { label: '保険始期(開始日)', key: 'insuranceStartDate' },
+                ]
+              )}
+
+              ${renderSection(
+                '5. ご希望の補償内容について',
+                formData,
+                [
+                  { label: '対人賠償保険', key: 'personalLiabilityInsurance' },
+                  { label: '対物賠償保険', key: 'propertyLiabilityInsurance' },
+                  { label: '対物賠償その他金額', key: 'propertyLiabilityOtherAmount' },
+                  { label: '対物賠償自己負担額', key: 'propertyLiabilityDeductible' },
+                  { label: '対物賠償自己負担額その他', key: 'propertyLiabilityDeductibleOtherAmount' },
+                  { label: '人身傷害保険', key: 'personalInjuryInsurance' },
+                  { label: '人身傷害その他金額', key: 'personalInjuryOtherAmount' },
+                  { label: '人身傷害補償範囲', key: 'personalInjuryCoverageScope' },
+                  { label: '人身傷害入院時定額給付金', key: 'personalInjuryInpatientAllowance' },
+                  { label: '人身傷害死亡・後遺障害定額給付金特約', key: 'personalInjuryDeathDisabilityAllowance' },
+                  { label: '人身傷害死亡・後遺障害定額給付金額', key: 'personalInjuryDeathDisabilityAmount' },
+                  { label: '車両保険タイプ', key: 'vehicleInsuranceType' },
+                  { label: '車両保険金額', key: 'vehicleInsuranceAmount' },
+                  { label: '車両保険自己負担額(1回目)', key: 'vehicleInsuranceDeductibleFirst' },
+                  { label: '車両保険自己負担額(2回目以降)', key: 'vehicleInsuranceDeductibleSecond' },
+                  { label: '弁護士費用特約', key: 'lawyerFeeSpecialClause' },
+                  { label: '個人賠償責任特約', key: 'personalLiabilitySpecialClause' },
+                  { label: '新車特約', key: 'newCarSpecialClause' },
+                  { label: '車両全損時復旧費用特約', key: 'totalLossRecoverySpecialClause' },
+                  { label: '代車等諸費用特約', key: 'rentalCarAllowanceSpecialClause' },
+                  { label: '代車日額', key: 'rentalCarDailyAmount' },
+                  { label: 'その他希望特約', key: 'otherSpecialClauses' },
+                  { label: 'ドライブレコーダー等', key: 'hasDashCam' },
+                ]
+              )}
+
+              ${renderSection(
+                '6. 保険料のお支払い方法について',
+                formData,
+                [
+                  { label: 'お支払い方法', key: 'paymentMethod' },
+                  { label: 'その他支払い方法', key: 'paymentMethodOther' },
+                  { label: 'お支払い回数', key: 'paymentFrequency' },
+                ]
+              )}
+
+              ${renderSection(
+                '7. その他・ご要望など',
+                formData,
+                [
+                  { label: 'お見積りプランについてのご希望', key: 'desiredPlan' },
+                  { label: '特に重視される点', key: 'importantPoints' },
+                  { label: 'その他、ご質問やご要望など', key: 'otherQuestions' },
+                  { label: '同意済み', key: 'consentToSubmit' }, // 同意状況をここに表示
+                  { label: '署名', key: 'signature' },
+                  { label: '日付', key: 'signYear', format: (data) => `${data.signYear}年${data.signMonth}月${data.signDay}日` } // 日付の表示を調整
+                ]
+              )}
+
+            </div>
+            <!-- Footer Information for PDF -->
+            <div class="mt-8 p-6 bg-red-100 rounded-lg text-red-800 border border-red-200 section-highlight-red text-center">
+                <p class="mb-2">ご記入、誠にありがとうございました。</p>
+                <p class="mb-4">いただきました情報と「新規受付票」に基づきまして、お客様に最適なプランのお見積りを作成させていただきます。</p>
+                <p class="font-semibold">損害保険ジャパン株式会社</p>
+                <p class="font-semibold">取扱代理店 リバティ保険ショップ [宇都宮店/宇都宮南店]</p>
+                <p>宇都宮店:栃木県宇都宮市今泉町3009-4 電話番号:028-666-7511</p>
+                <p>宇都宮南店:栃木県河内郡上三川町しらさぎ1-6-4 電話番号:0285-37-8512</p>
+                <p>Email: info@hoken-liberty.com</p>
+            </div>
+          </div>
+        `;
+
+        if (incompleteFields.length > 0) {
+          const alertDiv = document.getElementById('incomplete-fields-alert');
+          alertDiv.innerHTML = `
+            <div class="bg-orange-50 border-l-4 border-orange-500 text-orange-700 p-4 rounded-md mb-8" role="alert">
+              <p class="font-bold text-lg mb-2 flex items-center">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2 text-orange-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                未入力の項目があります
+              </p>
+              <p class="mb-3">
+                以下の項目が未入力です。このままPDF出力することも可能ですが、詳細な見積もりには追加情報が必要となる場合があります。
+              </p>
+              <ul class="list-disc list-inside text-sm max-h-40 overflow-y-auto pr-2">
+                ${incompleteFields.map(field => `<li>${field}</li>`).join('')}
+              </ul>
+            </div>
+          `;
+        } else {
+          document.getElementById('incomplete-fields-alert').innerHTML = '';
+        }
+
+        contentEl.querySelectorAll('.edit-section-btn').forEach(button => {
+          button.addEventListener('click', (e) => {
+            const sectionTitle = e.target.closest('.edit-section-btn').dataset.section;
+            handleEdit(sectionTitle);
+          });
+        });
+        // PDF出力ボタンはフッターの「次へ」ボタンに統合されたため、削除
+      }
+
+      // メインのレンダリング関数
+      function renderApp() {
+        renderHeader();
+        const mainContentEl = document.getElementById('app-content');
+        mainContentEl.innerHTML = ''; // メインコンテンツをクリア
+
+        switch (currentStep) {
+          case 0: renderWelcomeScreen(); break;
+          case 1: renderCarInfoForm(); break;
+          case 2: renderDriverInfoForm(); break;
+          case 3: renderCurrentInsuranceForm(); break;
+          case 4: renderInsurancePeriodForm(); break;
+          case 5: renderCoverageOptionsForm(); break;
+          case 6: renderPaymentAndNotesForm(); break;
+          case 7: renderConfirmationScreen(); break; // 確認画面
+          default: renderWelcomeScreen(); break;
+        }
+        renderFooter(); // フッターは常に表示
+      }
+
+      // ページ読み込み完了後にアプリケーションを初期化
+      document.addEventListener('DOMContentLoaded', () => {
+        // サービスワーカーの登録
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.register('service-worker.js')
+            .then(registration => {
+              console.log('Service Worker Registered!', registration);
+            })
+            .catch(error => {
+              console.error('Service Worker registration failed:', error);
+            });
+        }
+        renderApp();
+      });
+    </script>
+  </body>
+</html>
